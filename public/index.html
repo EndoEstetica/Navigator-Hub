@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Navigator Call v6</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: #0A1628;
+      color: white;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .header {
+      background: rgba(13,31,74,0.95);
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255,191,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-radius: 8px;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo-text {
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFBF00;
+      letter-spacing: 0.5px;
+    }
+    
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0D1F4A 0%, #183C63 50%, #0D1F4A 100%);
+    }
+    
+    .login-box {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,191,0,0.2);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    
+    .login-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    
+    .login-title {
+      color: #FFBF00;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+    
+    .login-subtitle {
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      letter-spacing: 2px;
+    }
+    
+    .user-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .user-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 12px 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Montserrat', sans-serif;
+      transition: all 0.2s;
+    }
+    
+    .user-btn:hover {
+      background: rgba(255,191,0,0.15);
+      border-color: rgba(255,191,0,0.4);
+    }
+    
+    .pin-display {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .pin-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    
+    .pin-dot.filled {
+      background: #FFBF00;
+      border-color: #FFBF00;
+    }
+    
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    
+    .key-btn {
+      height: 56px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      color: white;
+      font-size: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Montserrat', sans-serif;
+      transition: all 0.15s;
+    }
+    
+    .key-btn:hover {
+      background: rgba(255,191,0,0.15);
+    }
+    
+    .dashboard {
+      display: none;
+    }
+    
+    .dashboard.active {
+      display: block;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .stat-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    
+    .stat-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FFBF00;
+    }
+    
+    .calls-list {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    
+    .call-item {
+      padding: 14px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .call-status {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      color: #22C55E;
+      font-weight: 600;
+      min-width: 90px;
+      text-align: center;
+    }
+    
+    .call-info {
+      flex: 1;
+    }
+    
+    .call-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 2px;
+    }
+    
+    .call-phone {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+    }
+    
+    .call-time {
+      text-align: center;
+      min-width: 50px;
+    }
+    
+    .call-time-val {
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #FFBF00, #E6A800);
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      color: #0D1F4A;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Montserrat', sans-serif;
+    }
+    
+    .btn-secondary {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 12px 20px;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: 'Montserrat', sans-serif;
+    }
+  </style>
+</head>
+<body>
+
+<div id="login-screen" class="login-screen">
+  <div class="login-box">
+    <div class="login-header">
+      <div class="login-title">NAVIGATOR CALL</div>
+      <div class="login-subtitle">ENDOESTETICA</div>
+    </div>
+    
+    <div id="user-select">
+      <p style="color: rgba(255,255,255,0.7); text-align: center; margin-bottom: 20px; font-size: 14px;">Wybierz swoje konto</p>
+      
+      <div style="margin-bottom: 16px;">
+        <p style="color: rgba(255,191,0,0.7); font-size: 11px; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase;">Recepcja</p>
+        <div class="user-grid">
+          <button class="user-btn" onclick="selectUser('asia')">Asia</button>
+          <button class="user-btn" onclick="selectUser('kasia')">Kasia</button>
+          <button class="user-btn" onclick="selectUser('agnieszka')">Agnieszka</button>
+          <button class="user-btn" onclick="selectUser('aneta')">Aneta</button>
+          <button class="user-btn" onclick="selectUser('agata')">Agata</button>
+        </div>
+      </div>
+      
+      <div>
+        <p style="color: rgba(255,191,0,0.7); font-size: 11px; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase;">Zarządzanie</p>
+        <div class="user-grid">
+          <button class="user-btn" onclick="selectUser('bartosz')">Bartosz</button>
+          <button class="user-btn" onclick="selectUser('sandra')">Sandra</button>
+          <button class="user-btn" onclick="selectUser('aneta_m')">Aneta (M)</button>
+          <button class="user-btn" onclick="selectUser('sonia')">Sonia</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="pin-input" style="display: none;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(255,191,0,0.2); border: 2px solid rgba(255,191,0,0.4); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 22px; font-weight: 700; color: #FFBF00;" id="user-avatar"></div>
+        <p style="color: white; font-weight: 600; font-size: 16px; margin: 0 0 4px;" id="user-name"></p>
+        <button onclick="backToUsers()" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 12px; font-family: 'Montserrat', sans-serif;">← Zmień osobę</button>
+      </div>
+      
+      <div class="pin-display" id="pin-display"></div>
+      
+      <div class="keypad">
+        <button class="key-btn" onclick="addPin('1')">1</button>
+        <button class="key-btn" onclick="addPin('2')">2</button>
+        <button class="key-btn" onclick="addPin('3')">3</button>
+        <button class="key-btn" onclick="addPin('4')">4</button>
+        <button class="key-btn" onclick="addPin('5')">5</button>
+        <button class="key-btn" onclick="addPin('6')">6</button>
+        <button class="key-btn" onclick="addPin('7')">7</button>
+        <button class="key-btn" onclick="addPin('8')">8</button>
+        <button class="key-btn" onclick="addPin('9')">9</button>
+        <button class="key-btn" style="background: transparent; border: none;"></button>
+        <button class="key-btn" onclick="addPin('0')">0</button>
+        <button class="key-btn" onclick="backspace()">⌫</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dashboard" class="dashboard">
+  <div class="header">
+    <div class="logo">
+      <div class="logo-text">NAVIGATOR CALL</div>
+    </div>
+    <button class="btn-secondary" onclick="logout()">Wyloguj</button>
+  </div>
+  
+  <div class="container">
+    <h2 style="margin-bottom: 20px;">📞 Live Feed</h2>
+    
+    <div class="stats-grid" id="stats-grid"></div>
+    
+    <div class="calls-list" id="calls-list">
+      <div style="padding: 48px; text-align: center; color: rgba(255,255,255,0.3); font-size: 14px;">
+        Brak połączeń dzisiaj
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+let currentPin = '';
+let ws = null;
+let calls = [];
+let stats = {};
+
+// ─── Logowanie ────────────────────────────────────────────────────────────
+
+function selectUser(userId) {
+  currentUser = userId;
+  currentPin = '';
+  document.getElementById('user-select').style.display = 'none';
+  document.getElementById('pin-input').style.display = 'block';
+  
+  const names = {
+    asia: 'Asia', kasia: 'Kasia', agnieszka: 'Agnieszka', aneta: 'Aneta', agata: 'Agata',
+    bartosz: 'Bartosz', sandra: 'Sandra', aneta_m: 'Aneta (M)', sonia: 'Sonia'
+  };
+  
+  document.getElementById('user-avatar').textContent = names[userId][0];
+  document.getElementById('user-name').textContent = names[userId];
+  updatePinDisplay();
+}
+
+function backToUsers() {
+  currentUser = null;
+  currentPin = '';
+  document.getElementById('user-select').style.display = 'block';
+  document.getElementById('pin-input').style.display = 'none';
+}
+
+function addPin(digit) {
+  if (currentPin.length < 4) {
+    currentPin += digit;
+    updatePinDisplay();
+    if (currentPin.length === 4) {
+      login();
+    }
+  }
+}
+
+function backspace() {
+  currentPin = currentPin.slice(0, -1);
+  updatePinDisplay();
+}
+
+function updatePinDisplay() {
+  const display = document.getElementById('pin-display');
+  display.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'pin-dot' + (i < currentPin.length ? ' filled' : '');
+    display.appendChild(dot);
+  }
+}
+
+async function login() {
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser, pin: currentPin })
+    });
+    
+    const data = await res.json();
+    if (data.success) {
+      sessionStorage.setItem('user', JSON.stringify(data.user));
+      showDashboard(data.user);
+      connectWebSocket();
+    } else {
+      alert('Nieprawidłowy PIN');
+      currentPin = '';
+      updatePinDisplay();
+    }
+  } catch (err) {
+    alert('Błąd logowania');
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('user');
+  currentUser = null;
+  currentPin = '';
+  if (ws) ws.close();
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('user-select').style.display = 'block';
+  document.getElementById('pin-input').style.display = 'none';
+}
+
+// ─── Dashboard ─────────────────────────────────────────────────────────────
+
+function showDashboard(user) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').classList.add('active');
+}
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${window.location.host}`);
+  
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    
+    if (msg.type === 'INIT') {
+      calls = msg.calls;
+      stats = msg.stats;
+      updateUI();
+    } else if (msg.type === 'CALL_RINGING') {
+      const newCall = {
+        id: msg.callId,
+        caller_phone: msg.callerPhone,
+        called_phone: msg.calledPhone,
+        status: 'ringing',
+        created_at: new Date().toISOString(),
+        duration_seconds: 0,
+        ghl_logged: false
+      };
+      calls.unshift(newCall);
+      updateUI();
+    } else if (msg.type === 'CALL_ENDED') {
+      const call = calls.find(c => c.id === msg.callId);
+      if (call) {
+        call.status = msg.status;
+        call.duration_seconds = msg.duration;
+      }
+      if (msg.stats) stats = msg.stats;
+      updateUI();
+    }
+  };
+}
+
+function updateUI() {
+  // Statystyki
+  const statsHtml = `
+    <div class="stat-card"><div class="stat-label">📞 Wszystkie</div><div class="stat-value">${stats.total || 0}</div></div>
+    <div class="stat-card"><div class="stat-label">✅ Odebrane</div><div class="stat-value">${stats.answered || 0}</div></div>
+    <div class="stat-card"><div class="stat-label">📵 Nieodebrane</div><div class="stat-value">${stats.missed || 0}</div></div>
+    <div class="stat-card"><div class="stat-label">🗓️ Umówieni</div><div class="stat-value">${stats.booked || 0}</div></div>
+  `;
+  document.getElementById('stats-grid').innerHTML = statsHtml;
+  
+  // Połączenia
+  if (calls.length === 0) {
+    document.getElementById('calls-list').innerHTML = '<div style="padding: 48px; text-align: center; color: rgba(255,255,255,0.3); font-size: 14px;">Brak połączeń dzisiaj</div>';
+  } else {
+    const callsHtml = calls.map(call => `
+      <div class="call-item">
+        <div class="call-status">${call.status === 'answered' ? '✅ Odebrane' : call.status === 'ringing' ? '📞 Dzwoni' : '📵 Nieodebrane'}</div>
+        <div class="call-info">
+          <div class="call-name">${call.caller_phone || 'Nieznany'}</div>
+          <div class="call-phone">${call.duration_seconds}s</div>
+        </div>
+        <div class="call-time">
+          <div class="call-time-val">${new Date(call.created_at).toLocaleTimeString('pl-PL', {hour: '2-digit', minute: '2-digit'})}</div>
+        </div>
+      </div>
+    `).join('');
+    document.getElementById('calls-list').innerHTML = callsHtml;
+  }
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+
+window.addEventListener('load', () => {
+  const user = sessionStorage.getItem('user');
+  if (user) {
+    showDashboard(JSON.parse(user));
+    connectWebSocket();
+  }
+});
+</script>
+
+</body>
+</html>
