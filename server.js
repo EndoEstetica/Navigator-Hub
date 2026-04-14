@@ -593,6 +593,12 @@ app.get('/api/health', (req, res) => {
 
 // ─── Webhook: Zadarma ───────────────────────────────────────────────────────
 
+// Zadarma verification (GET z zd_echo)
+app.get('/webhook/zadarma', (req, res) => {
+  if (req.query.zd_echo) return res.send(req.query.zd_echo);
+  res.json({ status: 'ok' });
+});
+
 app.post('/webhook/zadarma', async (req, res) => {
   const { event, call_id, pbx_call_id, caller_id, called_did, seconds, sign, internal, disposition } = req.body;
   
