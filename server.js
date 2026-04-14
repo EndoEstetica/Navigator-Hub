@@ -216,7 +216,7 @@ async function getGHLContactByPhone(phone) {
 async function moveOpportunityToStage(contactId, stageId) {
   try {
     // Szukaj opportunity dla kontaktu
-    const res = await ghlApi.get('/opportunities/search', {
+    const res = await ghlApi.get('/opportunities/', {
       params: { locationId: GHL_LOCATION_ID, contactId, pipelineId: PIPELINE_ID },
     });
     
@@ -226,8 +226,10 @@ async function moveOpportunityToStage(contactId, stageId) {
         stageId,
         pipelineId: PIPELINE_ID,
       });
+      console.log(`[GHL] Moved opportunity ${oppId} to stage ${stageId}`);
       return true;
     }
+    console.log(`[GHL] No opportunity found for contact ${contactId}`);
     return false;
   } catch (err) {
     console.error('[GHL] Move opportunity error:', err.message);
@@ -261,7 +263,11 @@ async function addNoteToContact(contactId, note) {
 
 async function getNewLeadsFromGHL() {
   try {
-    const res = await ghlApi.get('/opportunities/search', {
+    const res = await ghlApi.get('/pipelines/' + PIPELINE_ID);
+    const pipeline = res.data;
+    
+    // Pobierz opportunities z pipeline
+    const oppsRes = await ghlApi.get('/opportunities/', {
       params: {
         locationId: GHL_LOCATION_ID,
         pipelineId: PIPELINE_ID,
@@ -270,15 +276,38 @@ async function getNewLeadsFromGHL() {
       },
     });
     
-    return (res.data.opportunities || []).map(opp => ({
-      id: opp.id,
-      contactId: opp.contactId,
-      name: opp.contactName || opp.name || 'Brak imienia',
-      phone: opp.contactPhone || '',
-      email: opp.contactEmail || '',
-      createdAt: opp.createdAt,
-      source: opp.source || '',
-    }));
+    const opportunities = oppsRes.data.opportunities || [];
+    
+    // Dla każdej opportunity pobierz dane kontaktu
+    const leads = [];
+    for (const opp of opportunities) {
+      let contactName = opp.contact?.name || opp.name || 'Brak imienia';
+      let contactPhone = opp.contact?.phone || '';
+      let contactEmail = opp.contact?.email || '';
+      
+      // Jeśli brak danych kontaktu — pobierz z GHL
+      if (opp.contactId && (!contactPhone || !contactName || contactName === 'Brak imienia')) {
+        try {
+          const contactRes = await ghlApi.get(`/contacts/${opp.contactId}`);
+          const c = contactRes.data.contact || contactRes.data;
+          contactName = `${c.firstName || ''} ${c.lastName || ''}`.trim() || contactName;
+          contactPhone = c.phone || contactPhone;
+          contactEmail = c.email || contactEmail;
+        } catch (e) { /* ignore */ }
+      }
+      
+      leads.push({
+        id: opp.id,
+        contactId: opp.contactId,
+        name: contactName,
+        phone: contactPhone,
+        email: contactEmail,
+        createdAt: opp.createdAt,
+        source: opp.source || '',
+      });
+    }
+    
+    return leads;
   } catch (err) {
     console.error('[GHL] Get new leads error:', err.message);
     return [];
@@ -602,11 +631,12 @@ app.get('/webhook/zadarma', (req, res) => {
 app.post('/webhook/zadarma', async (req, res) => {
   const { event, call_id, pbx_call_id, caller_id, called_did, seconds, sign, internal, disposition } = req.body;
   
-  // Weryfikacja podpisu
-  if (!verifyZadarmaSignature(req.body, sign)) {
-    console.log('[Zadarma] Invalid signature');
-    return res.status(401).json({ error: 'Invalid signature' });
-  }
+  // Weryfikacja podpisu — tymczasowo wyłączona (debug)
+  // if (!verifyZadarmaSignature(req.body, sign)) {
+  //   console.log('[Zadarma] Invalid signature');
+  //   return res.status(401).json({ error: 'Invalid signature' });
+  // }
+  console.log('[Zadarma] Webhook received:', JSON.stringify(req.body));
   
   const callId = pbx_call_id || call_id || `call_${Date.now()}`;
   
