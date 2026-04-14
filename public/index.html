@@ -1753,19 +1753,45 @@ async function saveNewContact() {
   } catch(e) { alert('Błąd połączenia'); }
 }
 
-// ─── CLICK-TO-CALL ───────────────────────────────────────────────────────────
+// ─── CLICK-TO-CALL ────────────────────────────────────────────────────────
 async function dialNumber(phone) {
   if (!phone) { alert('Brak numeru'); return; }
   if (!confirm(`Zadzwonić do ${phone}?`)) return;
+  
+  // Próba przez WebRTC widget Zadarma (jeśli zaladowany)
+  if (window.zadarmaWidget && typeof window.zadarmaWidget.call === 'function') {
+    try {
+      window.zadarmaWidget.call(phone);
+      return;
+    } catch(e) {
+      console.warn('WebRTC call failed, falling back to callback API:', e);
+    }
+  }
+  
+  // Fallback: Zadarma Callback API (serwer dzwoni najpierw do agenta, potem do pacjenta)
   try {
+    const fromExt = currentUser?.ext || '225340';
     const r = await fetch('/api/call/dial', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ toNumber:phone, fromExt:'103' }),
+      body: JSON.stringify({ toNumber:phone, fromExt }),
     });
     const d = await r.json();
-    if (d.status === 'success') alert('Łączenie... Zadarma zadzwoni na Twój telefon, a potem połączy z pacjentem.');
-    else alert('Błąd: ' + (d.message || 'Nieznany błąd'));
-  } catch(e) { alert('Błąd połączenia'); }
+    if (d.status === 'success') {
+      showToast('✅ Łączenie... Zadarma zadzwoni najpierw na Twój telefon, a potem połączy z pacjentem.');
+    } else {
+      showToast('❌ Błąd połączenia: ' + (d.message || 'Nieznany błąd'), 'error');
+    }
+  } catch(e) { showToast('❌ Błąd połączenia z serwerem', 'error'); }
+}
+
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:600;font-family:'Montserrat',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.25);max-width:380px;line-height:1.4;transition:opacity .4s;`;
+  t.style.background = type === 'error' ? '#e74c3c' : '#183C63';
+  t.style.color = '#fff';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 4000);
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 
 const GHL_TOKEN = process.env.GHL_TOKEN || 'pit-1ddb3acd-eedb-4a40-bfae-a36188d9c971';
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 'A0NcokQ5ZPxUcHawpRJJ';
-const ZADARMA_KEY = process.env.ZADARMA_KEY || '';
-const ZADARMA_SECRET = process.env.ZADARMA_SECRET || '';
+const ZADARMA_KEY = process.env.ZADARMA_KEY || '4cdf51e0b6739770c5d8';
+const ZADARMA_SECRET = process.env.ZADARMA_SECRET || '47dbb11240f49ed84a48';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 const PORT = process.env.PORT || 3000;
@@ -46,15 +46,17 @@ const STAGES = {
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 const users = {
-  asia: { id: 'asia', name: 'Asia', role: 'reception', ext: '103', pin: '1001' },
-  kasia: { id: 'kasia', name: 'Kasia', role: 'reception', ext: '103', pin: '1002' },
-  agnieszka: { id: 'agnieszka', name: 'Agnieszka', role: 'reception', ext: '103', pin: '1003' },
-  aneta: { id: 'aneta', name: 'Aneta', role: 'reception', ext: '103', pin: '1004' },
-  agata: { id: 'agata', name: 'Agata', role: 'reception', ext: '103', pin: '1005' },
-  bartosz: { id: 'bartosz', name: 'Bartosz', role: 'manager', ext: '103', pin: '2001' },
-  sandra: { id: 'sandra', name: 'Sandra', role: 'manager', ext: '103', pin: '2002' },
-  aneta_m: { id: 'aneta_m', name: 'Aneta (M)', role: 'manager', ext: '103', pin: '2003' },
-  sonia: { id: 'sonia', name: 'Sonia', role: 'manager', ext: '103', pin: '2004' },
+  // ext = PBX extension number used for Zadarma callback (from= parameter)
+  // Using main SIP 225340 as the 'from' number for callback calls
+  asia:     { id: 'asia',     name: 'Asia',       role: 'reception', ext: '225340', pin: '1001' },
+  kasia:    { id: 'kasia',    name: 'Kasia',      role: 'reception', ext: '225340', pin: '1002' },
+  agnieszka:{ id: 'agnieszka',name: 'Agnieszka',  role: 'reception', ext: '225340', pin: '1003' },
+  aneta:    { id: 'aneta',    name: 'Aneta',      role: 'reception', ext: '225340', pin: '1004' },
+  agata:    { id: 'agata',    name: 'Agata',      role: 'reception', ext: '225340', pin: '1005' },
+  bartosz:  { id: 'bartosz',  name: 'Bartosz',    role: 'manager',   ext: '225340', pin: '2001' },
+  sandra:   { id: 'sandra',   name: 'Sandra',     role: 'manager',   ext: '225340', pin: '2002' },
+  aneta_m:  { id: 'aneta_m',  name: 'Aneta (M)',  role: 'manager',   ext: '225340', pin: '2003' },
+  sonia:    { id: 'sonia',    name: 'Sonia',      role: 'manager',   ext: '225340', pin: '2004' },
 };
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
@@ -377,10 +379,12 @@ async function getNewLeadsFromGHL() {
 // ─── Zadarma API ─────────────────────────────────────────────────────────────
 
 function zadarmaSign(method, params) {
+  // Zadarma API: sort params, build query string, concat method+params+md5(params), then HMAC-SHA1 base64
   const sortedKeys = Object.keys(params).sort();
-  const paramString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
-  const signString = `${method}${paramString}${crypto.createHash('md5').update(paramString).digest('hex')}`;
-  return crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('hex');
+  const paramString = sortedKeys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
+  const signString = `${method}${paramString}${md5Hash}`;
+  return crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('base64');
 }
 
 function verifyZadarmaSignature(params, signature) {
@@ -407,22 +411,30 @@ function verifyZadarmaSignature(params, signature) {
 
 async function zadarmaClickToCall(fromExt, toNumber) {
   try {
+    // from = your SIP/phone, to = patient phone number
+    // sip = PBX extension used for CallerID and recording
     const params = {
       from: fromExt,
       to: toNumber,
+      sip: '225340',
     };
+    
+    const sign = zadarmaSign('/v1/request/callback/', params);
+    console.log('[Zadarma] Callback params:', params, 'sign:', sign);
     
     const res = await axios.get('https://api.zadarma.com/v1/request/callback/', {
       params,
       headers: {
-        'Authorization': `${ZADARMA_KEY}:${zadarmaSign('/v1/request/callback/', params)}`,
+        'Authorization': `${ZADARMA_KEY}:${sign}`,
       },
     });
     
+    console.log('[Zadarma] Callback response:', res.data);
     return res.data;
   } catch (err) {
-    console.error('[Zadarma] Click-to-Call error:', err.message);
-    return { status: 'error', message: err.message };
+    const errData = err.response?.data || err.message;
+    console.error('[Zadarma] Click-to-Call error:', errData);
+    return { status: 'error', message: typeof errData === 'object' ? errData.message : errData };
   }
 }
 
@@ -822,12 +834,30 @@ app.post('/api/contacts/add', async (req, res) => {
   }
 });
 
-// ─── API: Click-to-Call ─────────────────────────────────────────────────────
+// ─── API: WebRTC Key ────────────────────────────────────────────────────────
+
+app.get('/api/webrtc/key', async (req, res) => {
+  try {
+    const sip = req.query.sip || '225340';
+    const params = { sip };
+    const sign = zadarmaSign('/v1/webrtc/get_key/', params);
+    const response = await axios.get('https://api.zadarma.com/v1/webrtc/get_key/', {
+      params,
+      headers: { 'Authorization': `${ZADARMA_KEY}:${sign}` },
+    });
+    res.json(response.data);
+  } catch (err) {
+    console.error('[Zadarma] WebRTC get_key error:', err.response?.data || err.message);
+    res.status(500).json({ status: 'error', message: err.response?.data?.message || err.message });
+  }
+});
+
+// ─── API: Click-to-Call (legacy callback) ────────────────────────────────────
 
 app.post('/api/call/dial', async (req, res) => {
   const { toNumber, fromExt } = req.body;
   
-  const ext = fromExt || '103';
+  const ext = fromExt || '225340';
   const result = await zadarmaClickToCall(ext, toNumber);
   
   res.json(result);
