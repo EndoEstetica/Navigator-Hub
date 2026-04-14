@@ -541,9 +541,15 @@ textarea.form-input{resize:vertical;}
 
       <!-- ─── KROK 1: Dane pacjenta + klasyfikacja ─── -->
       <div id="rs-1">
-        <div class="form-group">
-          <label class="form-label">Imię i nazwisko pacjenta</label>
-          <input type="text" class="form-input" id="r-name" placeholder="np. Anna Kowalska">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Imię</label>
+            <input type="text" class="form-input" id="r-firstname" placeholder="np. Anna">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nazwisko</label>
+            <input type="text" class="form-input" id="r-lastname" placeholder="np. Kowalska">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Telefon</label>
@@ -939,8 +945,10 @@ function startReport(type) {
   rpt = { type, reason:'', temp:'', objections:[], outcome:'', source:'', treatment:'' };
 
   const call = openCalls.find(c => c.call_id === activeCallId);
+  const nameParts = call && call.patient_name ? call.patient_name.split(' ') : [];
+  document.getElementById('r-firstname').value = nameParts[0] || '';
+  document.getElementById('r-lastname').value = nameParts.slice(1).join(' ') || '';
   document.getElementById('r-phone').value = call ? (call.caller_phone || '') : '';
-  document.getElementById('r-name').value = call ? (call.patient_name || '') : '';
   document.getElementById('r-notes').value = '';
   document.getElementById('r-referred').value = '';
   document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('sel'));
@@ -1033,7 +1041,8 @@ function buildSummary() {
     ['Temperatura', rpt.temp || '—'],
     ['Wynik rozmowy', outcomeLabels[rpt.outcome] || rpt.outcome || '—'],
     ['Obiekcje', rpt.objections.join(', ') || '—'],
-    ['Imię', document.getElementById('r-name').value || '—'],
+    ['Imię', document.getElementById('r-firstname').value || '—'],
+    ['Nazwisko', document.getElementById('r-lastname').value || '—'],
     ['Telefon', document.getElementById('r-phone').value || '—'],
   ];
   document.getElementById('summary-box').innerHTML = rows.map(([k,v]) =>
@@ -1046,6 +1055,8 @@ async function saveReport() {
   if (!callId) { alert('Brak aktywnego połączenia'); return; }
   const call = openCalls.find(c => c.call_id === callId);
 
+  const firstName = document.getElementById('r-firstname').value.trim();
+  const lastName  = document.getElementById('r-lastname').value.trim();
   const payload = {
     callId,
     ghlContactId: call ? call.ghl_contact_id : null,
@@ -1055,7 +1066,9 @@ async function saveReport() {
     temperature: rpt.temp,
     objections: JSON.stringify(rpt.objections),
     userId: currentUser.id,
-    patientName: document.getElementById('r-name').value.trim(),
+    firstName,
+    lastName,
+    patientName: [firstName, lastName].filter(Boolean).join(' '),
     notes: document.getElementById('r-notes').value.trim(),
     source: rpt.source,
     treatment: rpt.treatment,
@@ -1174,8 +1187,10 @@ function openReportFor(callId) {
   activeCallId = callId;
   const call = openCalls.find(c => c.call_id === callId);
   rpt = { type:'nowy', reason:'', temp:'', objections:[], outcome:'', source:'', treatment:'' };
+  const nameParts2 = call && call.patient_name ? call.patient_name.split(' ') : [];
+  document.getElementById('r-firstname').value = nameParts2[0] || '';
+  document.getElementById('r-lastname').value = nameParts2.slice(1).join(' ') || '';
   document.getElementById('r-phone').value = call ? (call.caller_phone || '') : '';
-  document.getElementById('r-name').value = call ? (call.patient_name || '') : '';
   document.getElementById('r-notes').value = '';
   document.getElementById('r-referred').value = '';
   document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('sel'));
