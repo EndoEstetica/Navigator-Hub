@@ -106,6 +106,36 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .btn-nie{background:linear-gradient(135deg,#fce4ec,#f8bbd0);color:#880e4f;border-color:#f48fb1;}
 .btn-nie:not(.locked):hover{border-color:#e91e63;}
 
+/* ── KPI STRIP ────────────────────────────────────────────────────────── */
+.kpi-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.kpi-card{
+  background:#fff;
+  border-radius:14px;
+  padding:16px 18px;
+  box-shadow:0 2px 10px rgba(24,60,99,.07);
+  border-left:4px solid #e0e0e0;
+  transition:border-color .3s;
+}
+.kpi-card.kpi-ok{border-left-color:#4caf50;}
+.kpi-card.kpi-warn{border-left-color:#ff9800;}
+.kpi-card.kpi-bad{border-left-color:#f44336;}
+.kpi-label{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#888;margin-bottom:6px;}
+.kpi-value{font-size:28px;font-weight:900;color:#183C63;line-height:1;margin-bottom:8px;}
+.kpi-value.kpi-ok{color:#2e7d32;}
+.kpi-value.kpi-warn{color:#e65100;}
+.kpi-value.kpi-bad{color:#c62828;}
+.kpi-bar-wrap{position:relative;height:6px;background:#f0f2f8;border-radius:4px;margin-bottom:6px;overflow:visible;}
+.kpi-bar-fill{height:100%;border-radius:4px;transition:width .5s ease;background:#183C63;}
+.kpi-bar-fill.kpi-ok{background:#4caf50;}
+.kpi-bar-fill.kpi-warn{background:#ff9800;}
+.kpi-bar-fill.kpi-bad{background:#f44336;}
+.kpi-bar-target{position:absolute;top:-3px;width:2px;height:12px;background:#183C63;border-radius:2px;opacity:.5;}
+.kpi-meta{font-size:11px;color:#aaa;}
+.kpi-meta.kpi-ok{color:#2e7d32;font-weight:700;}
+.kpi-meta.kpi-warn{color:#e65100;font-weight:700;}
+.kpi-meta.kpi-bad{color:#c62828;font-weight:700;}
+@media(max-width:600px){.kpi-strip{grid-template-columns:1fr;}}
+
 /* ── NOWY FORMULARZ RAPORTU ─────────────────────────────────────────────── */
 .rpt-section-label{font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#183C63;margin-bottom:10px;}
 .outcome-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -463,6 +493,28 @@ textarea.form-input{resize:vertical;}
       <div class="stat-card">
         <div class="stat-label">Nieodebrane</div>
         <div class="stat-value" id="s-missed">—</div>
+      </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpi-strip" id="kpi-strip" style="display:none;">
+      <div class="kpi-card" id="kpi-pickup">
+        <div class="kpi-label">Odbieralność</div>
+        <div class="kpi-value" id="kv-pickup">—</div>
+        <div class="kpi-bar-wrap"><div class="kpi-bar-fill" id="kb-pickup"></div><div class="kpi-bar-target" id="kt-pickup"></div></div>
+        <div class="kpi-meta" id="km-pickup"></div>
+      </div>
+      <div class="kpi-card" id="kpi-callback">
+        <div class="kpi-label">Oddzwanialność</div>
+        <div class="kpi-value" id="kv-callback">—</div>
+        <div class="kpi-bar-wrap"><div class="kpi-bar-fill" id="kb-callback"></div><div class="kpi-bar-target" id="kt-callback"></div></div>
+        <div class="kpi-meta" id="km-callback"></div>
+      </div>
+      <div class="kpi-card" id="kpi-fast">
+        <div class="kpi-label">Odebrane ≤35s</div>
+        <div class="kpi-value" id="kv-fast">—</div>
+        <div class="kpi-bar-wrap"><div class="kpi-bar-fill" id="kb-fast"></div><div class="kpi-bar-target" id="kt-fast"></div></div>
+        <div class="kpi-meta" id="km-fast">Cel: 85%</div>
       </div>
     </div>
 
@@ -1497,7 +1549,79 @@ async function loadDailyStats() {
     document.getElementById('cnt-staly').textContent = `${dayCounts.staly||0} dziś`;
     document.getElementById('cnt-wizyta').textContent = `${dayCounts.wizyta||0} dziś`;
     document.getElementById('cnt-nie').textContent = `${dayCounts.nie_pacjent||0} dziś`;
+
+    // ── KPI strip
+    if (d.kpi) {
+      document.getElementById('kpi-strip').style.display = 'grid';
+      renderKPI('pickup',   d.kpi.pickupRate,     d.kpi.missedUnique,  d.kpi.calledBack);
+      renderKPI('callback', d.kpi.callbackRate,   d.kpi.missedUnique,  d.kpi.calledBack);
+      renderKPI('fast',     d.kpi.fastPickupRate, null, null);
+    }
   } catch(e) {}
+}
+
+function renderKPI(key, kpiData, missedData, calledData) {
+  if (!kpiData) return;
+  const val   = kpiData.value;
+  const tgt   = kpiData.target;
+  const unit  = kpiData.unit || '';
+
+  // Kolor na podstawie % celu
+  let cls = '';
+  if (val !== null && tgt !== null) {
+    if (val >= tgt)          cls = 'kpi-ok';
+    else if (val >= tgt * 0.75) cls = 'kpi-warn';
+    else                     cls = 'kpi-bad';
+  }
+
+  const card  = document.getElementById(`kpi-${key}`);
+  const vEl   = document.getElementById(`kv-${key}`);
+  const fill  = document.getElementById(`kb-${key}`);
+  const tgtEl = document.getElementById(`kt-${key}`);
+  const meta  = document.getElementById(`km-${key}`);
+
+  if (!card) return;
+
+  // Reset klas
+  card.classList.remove('kpi-ok','kpi-warn','kpi-bad');
+  vEl.classList.remove('kpi-ok','kpi-warn','kpi-bad');
+  meta.classList.remove('kpi-ok','kpi-warn','kpi-bad');
+  fill.classList.remove('kpi-ok','kpi-warn','kpi-bad');
+
+  if (val === null) {
+    vEl.textContent = '—';
+    fill.style.width = '0%';
+    meta.textContent = 'Brak danych';
+    return;
+  }
+
+  vEl.textContent = `${val}${unit}`;
+  fill.style.width = `${Math.min(val, 100)}%`;
+
+  if (cls) {
+    card.classList.add(cls);
+    vEl.classList.add(cls);
+    fill.classList.add(cls);
+    meta.classList.add(cls);
+  }
+
+  // Znacznik celu na pasku
+  if (tgt !== null && tgtEl) {
+    tgtEl.style.left = `${tgt}%`;
+  }
+
+  // Tekst meta
+  if (key === 'pickup') {
+    const pct = val !== null ? `${val}%` : '—';
+    meta.textContent = cls === 'kpi-ok' ? `✅ Cel spełniony (${pct})` : cls === 'kpi-warn' ? `⚠️ Poniżej celu (${pct})` : `❌ Daleko od celu (${pct})`;
+  } else if (key === 'callback') {
+    const detail = (missedData && calledData)
+      ? `${calledData.value}/${missedData.value} unikalnych num.`
+      : '';
+    meta.textContent = (cls === 'kpi-ok' ? '✅ ' : cls === 'kpi-warn' ? '⚠️ ' : '❌ ') + detail;
+  } else if (key === 'fast') {
+    meta.textContent = cls === 'kpi-ok' ? `✅ Cel 85% spełniony` : cls === 'kpi-warn' ? `⚠️ Poniżej 85%` : `❌ Cel: 85% (w ciągu 35s)`;
+  }
 }
 
 async function loadStats() {

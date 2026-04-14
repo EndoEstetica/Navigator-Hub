@@ -863,15 +863,64 @@ app.get('/api/stats', async (req, res) => {
     if (t && typeCounts[t] !== undefined) typeCounts[t]++;
   });
 
+  // ── KPI 1: Odbieralność (%)
+  const inbound = allCalls.filter(c => c.direction !== 'outbound');
+  const answeredInbound = inbound.filter(c => c.status === 'answered');
+  const pickupRate = inbound.length > 0
+    ? Math.round((answeredInbound.length / inbound.length) * 100)
+    : null;
+
+  // ── KPI 2: Oddzwanialność na nieodebrane (%)
+  // Grupujemy nieodebrane po numerze telefonu (unikalne numery)
+  // Jeśli na dany numer było oddzwonienie (answered call z tym numerem) — liczymy 1:1
+  const missedCalls = inbound.filter(c => c.status === 'no-answer');
+  const missedPhones = [...new Set(missedCalls.map(c => c.caller_phone).filter(Boolean))];
+  const callbackPhones = new Set(
+    allCalls
+      .filter(c => c.direction === 'outbound' && c.status === 'answered')
+      .map(c => c.caller_phone)
+      .filter(Boolean)
+  );
+  // Także: jeśli po nieodebranym ten sam numer zadzwonił ponownie i został odebrany
+  const answeredPhones = new Set(
+    answeredInbound.map(c => c.caller_phone).filter(Boolean)
+  );
+  const calledBackCount = missedPhones.filter(phone =>
+    callbackPhones.has(phone) || answeredPhones.has(phone)
+  ).length;
+  const callbackRate = missedPhones.length > 0
+    ? Math.round((calledBackCount / missedPhones.length) * 100)
+    : null;
+
+  // ── KPI 3: Czas odebrania ≤ 35s (% połączeń odebranych w ciągu 35s)
+  const KPI_PICKUP_SECONDS = 35;
+  const KPI_PICKUP_TARGET  = 85; // % cel
+  const callsWithTiming = answeredInbound.filter(c => c.answered_at && c.created_at);
+  const fastPickup = callsWithTiming.filter(c => {
+    const waitSec = (new Date(c.answered_at) - new Date(c.created_at)) / 1000;
+    return waitSec <= KPI_PICKUP_SECONDS;
+  });
+  const fastPickupRate = callsWithTiming.length > 0
+    ? Math.round((fastPickup.length / callsWithTiming.length) * 100)
+    : null;
+
   const totals = {
-    total: allCalls.length,
-    answered: allCalls.filter(c => c.status === 'answered').length,
-    missed: allCalls.filter(c => c.status === 'no-answer').length,
-    booked: allCalls.filter(c => c.call_effect === 'umowiony_w0').length,
+    total:    allCalls.length,
+    answered: answeredInbound.length,
+    missed:   missedCalls.length,
+    booked:   allCalls.filter(c => c.call_effect === 'umowiony_w0').length,
     followup: allCalls.filter(c => c.call_effect === 'followup' || c.call_effect === 'brak_decyzji').length,
   };
 
-  res.json({ totals, perUser, typeCounts });
+  const kpi = {
+    pickupRate:     { value: pickupRate,     label: 'Odbieralność',          unit: '%', target: 90, higher_is_better: true },
+    callbackRate:   { value: callbackRate,   label: 'Oddzwanialność',        unit: '%', target: 90, higher_is_better: true },
+    fastPickupRate: { value: fastPickupRate, label: 'Odebrane ≤35s',         unit: '%', target: KPI_PICKUP_TARGET, higher_is_better: true },
+    missedUnique:   { value: missedPhones.length, label: 'Unikalne nieodebrane', unit: '', target: null },
+    calledBack:     { value: calledBackCount,     label: 'Oddzwoniono',          unit: '', target: null },
+  };
+
+  res.json({ totals, perUser, typeCounts, kpi });
 });
 
 // ─── API: Health check ──────────────────────────────────────────────────────
