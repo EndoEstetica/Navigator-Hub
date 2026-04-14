@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Konfiguracja ────────────────────────────────────────────────────────────
 
-const GHL_TOKEN = process.env.GHL_TOKEN || 'pit-7faaf428-8f3f-4f9b-82c1-a5fb63979645';
+const GHL_TOKEN = process.env.GHL_TOKEN || 'pit-1ddb3acd-eedb-4a40-bfae-a36188d9c971';
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 'A0NcokQ5ZPxUcHawpRJJ';
 const ZADARMA_KEY = process.env.ZADARMA_KEY || '';
 const ZADARMA_SECRET = process.env.ZADARMA_SECRET || '';
