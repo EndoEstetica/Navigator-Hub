@@ -1085,8 +1085,11 @@ async function saveReport() {
     if (d.success) {
       closeReport();
       lockButtons(); hideActiveBar(); clearCallTimer();
+      // Usuń z listy W obsłudze lokalnie (WebSocket CALL_TOPIC_CLOSED też to zrobi)
+      openCalls = openCalls.filter(c => c.call_id !== callId);
       activeCallId = null;
-      loadOpenCalls(); loadDailyStats();
+      renderOpenCalls(); renderRecentCalls(); updateBadges();
+      loadDailyStats();
     } else {
       alert('Błąd zapisu: ' + (d.error || 'Nieznany błąd'));
     }

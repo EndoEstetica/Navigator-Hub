@@ -548,36 +548,53 @@ app.post('/api/call/outcome', async (req, res) => {
   });
 
   // ─── Logika GHL ──────────────────────────────────────────────────────────
-  // Ustal contactId: albo przekazany z frontu, albo pobierz z Supabase
-  let resolvedContactId = ghlContactId;
+  // Krok 1: Pobierz pełne dane z’ Supabase (telefon + ghl_contact_id)
+  const callRows = await supabase.query(`calls?call_id=eq.${callId}`, 'GET');
+  const callRow  = callRows && callRows.length > 0 ? callRows[0] : null;
+  const callerPhone = callRow ? (callRow.caller_phone || '') : '';
+
+  // Krok 2: Ustal ghl_contact_id
+  let resolvedContactId = ghlContactId || (callRow ? callRow.ghl_contact_id : null);
+
+  // Krok 3: Jeśli brak kontaktu w GHL — utwórz go ZAWSZE (nawet bez imienia)
   if (!resolvedContactId) {
-    const callRows = await supabase.query(`calls?call_id=eq.${callId}`, 'GET');
-    if (callRows && callRows.length > 0) {
-      resolvedContactId = callRows[0].ghl_contact_id || null;
+    try {
+      const newContact = {
+        firstName:  firstName  || 'Nieznany',
+        lastName:   lastName   || '',
+        locationId: GHL_LOCATION_ID,
+      };
+      if (callerPhone) newContact.phone = callerPhone;
+      const result  = await ghlApi.post('/contacts/', newContact);
+      const created = result.data.contact || result.data;
+      resolvedContactId = created.id;
+      console.log(`[GHL] Created contact: ${resolvedContactId} (${firstName} ${lastName} / ${callerPhone})`);
+      // Zapisz w Supabase
+      await supabase.updateCall(callId, { ghl_contact_id: resolvedContactId });
+    } catch (err) {
+      console.error('[GHL] Create contact error:', err.response?.data || err.message);
+    }
+  } else {
+    // Krok 3b: Kontakt istnieje — zaktualizuj imię/nazwisko jeśli podano
+    if (firstName || lastName) {
+      try {
+        const upd = {};
+        if (firstName) upd.firstName = firstName;
+        if (lastName)  upd.lastName  = lastName;
+        await ghlApi.put(`/contacts/${resolvedContactId}`, upd);
+        console.log(`[GHL] Updated contact ${resolvedContactId}: ${firstName} ${lastName}`);
+      } catch (err) {
+        console.error('[GHL] Update contact error:', err.response?.data || err.message);
+      }
     }
   }
 
+  // Krok 4: Przesuń / utwórz szansę sprzedaży
   if (resolvedContactId) {
     const targetStage = EFFECT_TO_STAGE[callEffect] ?? null;
-    const tags = [...(EFFECT_TO_TAGS[callEffect] || [])];
+    const tags = [...(EFFECT_TO_TAGS[callEffect] || []), 'lead_call'];
     if (treatment) tags.push(`leczenie_${treatment}`);
     if (source)    tags.push(`zrodlo_${source}`);
-
-    // ─── Aktualizacja danych kontaktu w GHL (firstName, lastName) ───
-    if (firstName || lastName) {
-      try {
-        const contactUpdate = {};
-        if (firstName) contactUpdate.firstName = firstName;
-        if (lastName)  contactUpdate.lastName  = lastName;
-        await ghlApi.put(`/contacts/${resolvedContactId}`, contactUpdate);
-        console.log(`[GHL] Updated contact ${resolvedContactId}: ${firstName} ${lastName}`);
-      } catch (err) {
-        console.error('[GHL] Update contact name error:', err.response?.data || err.message);
-      }
-    }
-
-    // ─── Jeśli kontakt nie istniał — utwórz nowy ───
-    // (resolvedContactId istnieje więc kontakt jest — pomiń)
 
     if (targetStage) {
       const moved = await moveOpportunityToStage(resolvedContactId, targetStage);
@@ -590,70 +607,31 @@ app.post('/api/call/outcome', async (req, res) => {
       await addTagToContact(resolvedContactId, tag);
     }
 
+    // Notatka z raportu
     const noteLines = [];
-    if (contactType) noteLines.push(`Typ: ${contactType}`);
+    if (contactType) noteLines.push(`Typ kontaktu: ${contactType}`);
     if (callReason)  noteLines.push(`Powód: ${callReason}`);
     if (temperature) noteLines.push(`Temperatura: ${temperature}`);
     if (objections)  noteLines.push(`Obiekcje: ${objections}`);
     if (notes)       noteLines.push(`Notatki: ${notes}`);
     if (referredBy)  noteLines.push(`Polecony przez: ${referredBy}`);
+    if (callerPhone) noteLines.push(`Telefon: ${callerPhone}`);
     if (noteLines.length > 0) {
       await addNoteToContact(
         resolvedContactId,
-        `[Navigator Call | ${userId}]\n${noteLines.join('\n')}`
+        `[Navigator Call | ${userId} | ${new Date().toLocaleString('pl-PL')}]\n${noteLines.join('\n')}`
       );
-    }
-  } else if (firstName || lastName) {
-    // ─── Brak kontaktu w GHL — utwórz nowy kontakt ───
-    try {
-      const newContact = {
-        firstName: firstName || '',
-        lastName:  lastName  || '',
-        locationId: GHL_LOCATION_ID,
-      };
-      // Pobierz telefon z Supabase
-      const callRows2 = await supabase.query(`calls?call_id=eq.${callId}`, 'GET');
-      if (callRows2 && callRows2.length > 0 && callRows2[0].caller_phone) {
-        newContact.phone = callRows2[0].caller_phone;
-      }
-      const result = await ghlApi.post('/contacts/', newContact);
-      const created = result.data.contact || result.data;
-      console.log(`[GHL] Created new contact: ${created.id} - ${firstName} ${lastName}`);
-
-      // Zapisz ghl_contact_id w Supabase
-      await supabase.updateCall(callId, { ghl_contact_id: created.id });
-
-      // Utwórz opportunity
-      const targetStage2 = EFFECT_TO_STAGE[callEffect] ?? null;
-      if (targetStage2) {
-        await createOpportunityForContact(created.id, targetStage2, patientName, treatment, source);
-      }
-
-      // Tagi
-      const tags2 = [...(EFFECT_TO_TAGS[callEffect] || []), 'lead_call'];
-      if (treatment) tags2.push(`leczenie_${treatment}`);
-      if (source)    tags2.push(`zrodlo_${source}`);
-      for (const tag of tags2) {
-        await addTagToContact(created.id, tag);
-      }
-
-      // Notatka
-      const noteLines2 = [];
-      if (contactType) noteLines2.push(`Typ: ${contactType}`);
-      if (callReason)  noteLines2.push(`Powód: ${callReason}`);
-      if (temperature) noteLines2.push(`Temperatura: ${temperature}`);
-      if (objections)  noteLines2.push(`Obiekcje: ${objections}`);
-      if (notes)       noteLines2.push(`Notatki: ${notes}`);
-      if (referredBy)  noteLines2.push(`Polecony przez: ${referredBy}`);
-      if (noteLines2.length > 0) {
-        await addNoteToContact(created.id, `[Navigator Call | ${userId}]\n${noteLines2.join('\n')}`);
-      }
-    } catch (err) {
-      console.error('[GHL] Create contact from report error:', err.response?.data || err.message);
     }
   }
 
+  // Krok 5: Auto-zamknij temat w aplikacji po zapisaniu raportu
+  await supabase.updateCall(callId, {
+    topic_closed: true,
+    closed_at: new Date().toISOString(),
+  });
+
   broadcast({ type: 'CALL_OUTCOME_SAVED', callId, callEffect, contactType });
+  broadcast({ type: 'CALL_TOPIC_CLOSED',  callId });
   res.json({ success: true });
 });
 
