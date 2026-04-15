@@ -20,8 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 
 const GHL_TOKEN = process.env.GHL_TOKEN || 'pit-1ddb3acd-eedb-4a40-bfae-a36188d9c971';
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 'A0NcokQ5ZPxUcHawpRJJ';
-const ZADARMA_KEY = process.env.ZADARMA_KEY || '4cdf51e0b6739770c5d8';
-const ZADARMA_SECRET = process.env.ZADARMA_SECRET || '47dbb11240f49ed84a48';
+const ZADARMA_KEY = process.env.ZADARMA_KEY || '80fb966e516fd1ac565e';
+const ZADARMA_SECRET = process.env.ZADARMA_SECRET || 'fde11f66f6eb8372080f';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 const PORT = process.env.PORT || 3000;
@@ -379,12 +379,15 @@ async function getNewLeadsFromGHL() {
 // ─── Zadarma API ─────────────────────────────────────────────────────────────
 
 function zadarmaSign(method, params) {
-  // Zadarma API: sort params, build query string, concat method+params+md5(params), then HMAC-SHA1 base64
+  // Zadarma API: sort params, build query string, concat method+params+md5(params), then HMAC-SHA1 base64(hex)
+  // WAŻNE: PHP hash_hmac() zwraca HEX string, potem base64_encode() koduje ten HEX
   const sortedKeys = Object.keys(params).sort();
-  const paramString = sortedKeys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const paramString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
   const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
   const signString = `${method}${paramString}${md5Hash}`;
-  return crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('base64');
+  // Zwróć base64(hex_signature), nie base64(binary_signature)
+  const hexSignature = crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('hex');
+  return Buffer.from(hexSignature).toString('base64');
 }
 
 function verifyZadarmaSignature(params, signature) {
@@ -401,12 +404,13 @@ function verifyZadarmaSignature(params, signature) {
     .update(paramString)
     .digest('hex');
   
-  const hmac = crypto
+  const hexSignature = crypto
     .createHmac('sha1', ZADARMA_SECRET)
-    .update(md5Hash)
-    .digest('base64');
+    .update('/v1/request/callback/' + paramString + md5Hash)
+    .digest('hex');
   
-  return hmac === signature;
+  const computedSignature = Buffer.from(hexSignature).toString('base64');
+  return computedSignature === signature;
 }
 
 async function zadarmaClickToCall(fromExt, toNumber) {
