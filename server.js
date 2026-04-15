@@ -47,16 +47,16 @@ const STAGES = {
 
 const users = {
   // ext = PBX extension number used for Zadarma callback (from= parameter)
-  // Using main SIP 225340 as the 'from' number for callback calls
-  asia:     { id: 'asia',     name: 'Asia',       role: 'reception', ext: '225340', pin: '1001' },
-  kasia:    { id: 'kasia',    name: 'Kasia',      role: 'reception', ext: '225340', pin: '1002' },
-  agnieszka:{ id: 'agnieszka',name: 'Agnieszka',  role: 'reception', ext: '225340', pin: '1003' },
-  aneta:    { id: 'aneta',    name: 'Aneta',      role: 'reception', ext: '225340', pin: '1004' },
-  agata:    { id: 'agata',    name: 'Agata',      role: 'reception', ext: '225340', pin: '1005' },
-  bartosz:  { id: 'bartosz',  name: 'Bartosz',    role: 'manager',   ext: '225340', pin: '2001' },
-  sandra:   { id: 'sandra',   name: 'Sandra',     role: 'manager',   ext: '225340', pin: '2002' },
-  aneta_m:  { id: 'aneta_m',  name: 'Aneta (M)',  role: 'manager',   ext: '225340', pin: '2003' },
-  sonia:    { id: 'sonia',    name: 'Sonia',      role: 'manager',   ext: '225340', pin: '2004' },
+  // Using PBX extension 103 for all users
+  asia:     { id: 'asia',     name: 'Asia',       role: 'reception', ext: '103', pin: '1001' },
+  kasia:    { id: 'kasia',    name: 'Kasia',      role: 'reception', ext: '103', pin: '1002' },
+  agnieszka:{ id: 'agnieszka',name: 'Agnieszka',  role: 'reception', ext: '103', pin: '1003' },
+  aneta:    { id: 'aneta',    name: 'Aneta',      role: 'reception', ext: '103', pin: '1004' },
+  agata:    { id: 'agata',    name: 'Agata',      role: 'reception', ext: '103', pin: '1005' },
+  bartosz:  { id: 'bartosz',  name: 'Bartosz',    role: 'manager',   ext: '103', pin: '2001' },
+  sandra:   { id: 'sandra',   name: 'Sandra',     role: 'manager',   ext: '103', pin: '2002' },
+  aneta_m:  { id: 'aneta_m',  name: 'Aneta (M)',  role: 'manager',   ext: '103', pin: '2003' },
+  sonia:    { id: 'sonia',    name: 'Sonia',      role: 'manager',   ext: '103', pin: '2004' },
 };
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
