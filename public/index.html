@@ -84,19 +84,13 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
   border:3px solid transparent;
   user-select:none;
 }
-/* Zablokowany — szary, nie klikalny */
-.type-btn.locked{
-  opacity:.35;
-  pointer-events:none;
-  filter:grayscale(.5);
-}
+.type-btn.locked{opacity:.35;pointer-events:none;filter:grayscale(.5);}
 .type-btn:not(.locked):hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.18);}
 .type-btn .t-icon{font-size:36px;margin-bottom:10px;display:block;}
 .type-btn .t-name{font-size:15px;font-weight:800;display:block;margin-bottom:4px;}
 .type-btn .t-desc{font-size:11px;opacity:.75;display:block;}
 .type-btn .t-count{position:absolute;top:10px;right:14px;font-size:11px;font-weight:700;opacity:.65;}
 
-/* Kolory przycisków */
 .btn-nowy{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#1b5e20;border-color:#a5d6a7;}
 .btn-nowy:not(.locked):hover{border-color:#4caf50;}
 .btn-staly{background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#0d47a1;border-color:#90caf9;}
@@ -106,16 +100,16 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .btn-nie{background:linear-gradient(135deg,#fce4ec,#f8bbd0);color:#880e4f;border-color:#f48fb1;}
 .btn-nie:not(.locked):hover{border-color:#e91e63;}
 
+/* Pulsowanie gdy aktywne połączenie */
+.type-btn.ringing-pulse{animation:btn-pulse 1.4s infinite;}
+@keyframes btn-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,191,0,.5);}50%{box-shadow:0 0 0 14px rgba(255,191,0,0);}}
+
+/* Stan po-rozmowie */
+.type-btn.post-call{opacity:1;pointer-events:auto;filter:none;border-style:dashed;border-width:2px;}
+
 /* ── KPI STRIP ────────────────────────────────────────────────────────── */
 .kpi-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
-.kpi-card{
-  background:#fff;
-  border-radius:14px;
-  padding:16px 18px;
-  box-shadow:0 2px 10px rgba(24,60,99,.07);
-  border-left:4px solid #e0e0e0;
-  transition:border-color .3s;
-}
+.kpi-card{background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 10px rgba(24,60,99,.07);border-left:4px solid #e0e0e0;transition:border-color .3s;}
 .kpi-card.kpi-ok{border-left-color:#4caf50;}
 .kpi-card.kpi-warn{border-left-color:#ff9800;}
 .kpi-card.kpi-bad{border-left-color:#f44336;}
@@ -136,6 +130,20 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .kpi-meta.kpi-bad{color:#c62828;font-weight:700;}
 @media(max-width:600px){.kpi-strip{grid-template-columns:1fr;}}
 
+/* ── COACHING PANEL (pkt 11) ──────────────────────────────── */
+.coaching-panel{background:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 2px 12px rgba(24,60,99,.08);margin-bottom:24px;}
+.coaching-title{font-size:14px;font-weight:800;color:#183C63;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.coaching-tips{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.coaching-tip{border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;}
+.coaching-tip.high{background:#fce4ec;border-left:4px solid #e53935;}
+.coaching-tip.medium{background:#fff3e0;border-left:4px solid #ff9800;}
+.coaching-tip.positive{background:#e8f5e9;border-left:4px solid #4caf50;}
+.coaching-tip.info{background:#e3f2fd;border-left:4px solid #2196f3;}
+.ct-icon{font-size:22px;flex-shrink:0;margin-top:2px;}
+.ct-body{}
+.ct-title{font-size:13px;font-weight:800;color:#183C63;margin-bottom:3px;}
+.ct-desc{font-size:12px;color:#555;line-height:1.5;}
+
 /* ── NOWY FORMULARZ RAPORTU ─────────────────────────────────────────────── */
 .rpt-section-label{font-size:11px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#183C63;margin-bottom:10px;}
 .outcome-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -149,37 +157,21 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
   transition:all .2s;
   text-align:center;
   background:#f5f7fa;
-  color:#333;
+  color:#fff;
 }
-.outcome-btn:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.12);}
+.outcome-btn:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18);}
 .outcome-btn.sel{box-shadow:0 0 0 3px #183C63 inset;}
-.ob-umowiony{background:#4caf50;color:#fff;border-color:#388e3c;}
-.ob-umowiony:hover{background:#43a047;}
+.ob-umowiony{background:#2e7d32;color:#fff;border-color:#1b5e20;}
+.ob-umowiony:hover{background:#388e3c;}
 .ob-umowiony.sel{box-shadow:0 0 0 3px #1b5e20 inset;}
-.ob-followup{background:#ff9800;color:#fff;border-color:#e65100;font-size:12px;}
-.ob-followup:hover{background:#fb8c00;}
+.ob-followup{background:#e65100;color:#fff;border-color:#bf360c;font-size:12px;}
+.ob-followup:hover{background:#f4511e;}
 .ob-followup.sel{box-shadow:0 0 0 3px #bf360c inset;}
-.ob-neg{background:#f44336;color:#fff;border-color:#c62828;}
-.ob-neg:hover{background:#e53935;}
+.ob-neg{background:#c62828;color:#fff;border-color:#7f0000;}
+.ob-neg:hover{background:#d32f2f;}
 .ob-neg.sel{box-shadow:0 0 0 3px #7f0000 inset;}
 
-/* Pulsowanie gdy aktywne połączenie */
-.type-btn.ringing-pulse{animation:btn-pulse 1.4s infinite;}
-@keyframes btn-pulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(255,191,0,.5);}
-  50%{box-shadow:0 0 0 14px rgba(255,191,0,0);}
-}
-
-/* Stan po-rozmowie: przyciski aktywne ale bez pulsowania */
-.type-btn.post-call{
-  opacity:1;
-  pointer-events:auto;
-  filter:none;
-  border-style:dashed;
-  border-width:2px;
-}
-
-/* Panel po-rozmowie: powiększony baner */
+/* ── PASEK PO-ROZMOWIE ─────────────────────────────────── */
 .post-call-bar{
   display:none;
   background:linear-gradient(90deg,#fff8e1,#fff3cd);
@@ -230,11 +222,11 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .acb-meta{font-size:12px;color:#aac0d8;margin-top:2px;}
 .acb-timer{font-size:22px;font-weight:800;color:#FFBF00;font-variant-numeric:tabular-nums;}
 
-/* ── RECENT CALLS (prawa kolumna) ───────────────────────── */
+/* ── RECENT CALLS ───────────────────────────────────────── */
 .recent-panel{background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(24,60,99,.08);max-height:600px;overflow-y:auto;}
 .recent-heading{font-size:14px;font-weight:800;color:#183C63;margin-bottom:14px;}
-.recent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .15s;border:1px solid #f0f2f8;}
-.recent-item:hover{background:#f8f9fb;}
+.recent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .15s;border:1px solid transparent;}
+.recent-item:hover{background:#f5f7fa;border-color:#e0e6ef;}
 .r-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex-shrink:0;}
 .r-info{flex:1;min-width:0;}
 .r-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -246,23 +238,27 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .rb-nieodebrane{background:#fce4ec;color:#c62828;}
 .rb-nowe{background:#e3f2fd;color:#1565c0;}
 .rb-ringing{background:#FFBF00;color:#183C63;animation:blink .8s infinite;}
+.rb-report{background:#183C63;color:#FFBF00;animation:blink .8s infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.4;}}
 
 /* ── CALL ITEMS ─────────────────────────────────────────── */
 .call-item{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(24,60,99,.06);border-left:4px solid #e0e6ef;}
 .call-item.is-ringing{border-left-color:#FFBF00;animation:row-blink 1.5s infinite;}
-@keyframes row-blink{0%,100%{background:#fff;}50%{background:#FFFDE7;}}
 .call-item.is-answered{border-left-color:#27ae60;}
 .call-item.is-missed{border-left-color:#e74c3c;}
 .call-item.is-closed{border-left-color:#9e9e9e;}
+.call-item.needs-report{border-left-color:#FFBF00;background:#fffde7;}
+@keyframes row-blink{0%,100%{background:#fff;}50%{background:#FFFDE7;}}
 .ci-badge{padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;}
 .cib-ringing{background:#FFF3E0;color:#E65100;}
 .cib-answered{background:#E8F5E9;color:#2E7D32;}
 .cib-missed{background:#FCE4EC;color:#C62828;}
 .cib-closed{background:#EEEEEE;color:#616161;}
+.cib-report{background:#FFBF00;color:#183C63;}
 .ci-info{flex:1;min-width:0;}
 .ci-name{font-size:14px;font-weight:700;color:#183C63;}
 .ci-phone{font-size:12px;color:#888;margin-top:2px;}
+.ci-time-pickup{font-size:11px;color:#888;margin-top:2px;}
 .ci-effect{display:inline-flex;align-items:center;gap:4px;background:#e8f5e9;color:#2e7d32;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-top:4px;}
 .ci-effect.eff-followup{background:#fff3e0;color:#e65100;}
 .ci-effect.eff-brak{background:#f3e5f5;color:#6a1b9a;}
@@ -273,12 +269,27 @@ body{font-family:'Montserrat',sans-serif;background:#f0f2f8;color:#1a1a2e;min-he
 .act-btn:hover{filter:brightness(.92);}
 .act-play{background:#183C63;color:#FFBF00;}
 .act-play:hover{background:#1e4d7a;filter:none;}
-audio.mini-player{width:100%;max-width:300px;height:34px;margin-top:6px;display:block;border-radius:8px;}
 .act-primary{background:#FFBF00;color:#183C63;}
 .act-danger{background:#fce4ec;color:#c62828;}
 .act-neutral{background:#f0f2f8;color:#555;}
-audio{height:28px;width:180px;margin-top:4px;display:block;}
+.act-report{background:#183C63;color:#FFBF00;animation:btn-pulse 1.4s infinite;}
+audio.mini-player{width:100%;max-width:300px;height:34px;margin-top:6px;display:block;border-radius:8px;}
 .empty-state{text-align:center;padding:48px 20px;color:#aaa;font-size:14px;}
+
+/* ── GRUPOWANIE NIEODEBRANYCH (pkt 8) ──────────────────── */
+.missed-group{background:#fff;border-radius:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(24,60,99,.06);border-left:4px solid #e74c3c;overflow:hidden;}
+.missed-group-header{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:background .15s;}
+.missed-group-header:hover{background:#fce4ec;}
+.mg-badge{background:#fce4ec;color:#c62828;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;}
+.mg-info{flex:1;}
+.mg-name{font-size:14px;font-weight:700;color:#183C63;}
+.mg-count{font-size:12px;color:#e74c3c;font-weight:700;}
+.mg-toggle{font-size:12px;color:#888;transition:transform .2s;}
+.mg-toggle.open{transform:rotate(180deg);}
+.missed-group-body{display:none;padding:0 16px 12px;}
+.missed-group-body.open{display:block;}
+.mg-item{padding:8px 12px;border-radius:8px;background:#fce4ec;margin-bottom:6px;font-size:12px;color:#555;}
+.mg-item-time{font-weight:700;color:#c62828;}
 
 /* ── NOWE ZGŁOSZENIA ────────────────────────────────────── */
 .lead-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(24,60,99,.06);border-left:4px solid #183C63;}
@@ -315,18 +326,6 @@ textarea.form-input{resize:vertical;}
 .choice-btn{padding:9px 15px;border:2px solid #e0e6ef;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#333;transition:all .2s;font-family:'Montserrat',sans-serif;}
 .choice-btn:hover{border-color:#FFBF00;background:#FFFDE7;}
 .choice-btn.sel{border-color:#FFBF00;background:#FFBF00;color:#183C63;}
-.choice-btn.multi.sel{border-color:#2196f3;background:#e3f2fd;color:#0d47a1;}
-
-/* Outcome buttons — duże z etapem GHL */
-.outcome-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.outcome-btn{padding:16px 12px;border:2px solid #e0e6ef;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all .2s;font-family:'Montserrat',sans-serif;}
-.outcome-btn:hover{border-color:#FFBF00;background:#FFFDE7;}
-.outcome-btn.sel{border-color:#FFBF00;background:#FFBF00;color:#183C63;}
-.ob-icon{font-size:28px;display:block;margin-bottom:6px;}
-.ob-label{font-size:13px;font-weight:700;display:block;}
-.ob-sub{font-size:10px;opacity:.65;display:block;margin-top:2px;}
-.outcome-btn.ob-umowiony.sel{background:#e8f5e9;border-color:#4caf50;color:#1b5e20;}
-.outcome-btn.ob-neg.sel{background:#fce4ec;border-color:#e91e63;color:#880e4f;}
 
 /* Step nav */
 .step-nav{display:flex;gap:10px;margin-top:24px;padding-top:20px;border-top:2px solid #f0f2f8;}
@@ -346,6 +345,14 @@ textarea.form-input{resize:vertical;}
 .summary-key{color:#888;font-weight:600;}
 .summary-val{font-weight:700;color:#183C63;text-align:right;max-width:60%;}
 
+/* Podgląd raportu (pkt 5) */
+.report-view{background:#f8f9fb;border-radius:14px;padding:20px;margin-bottom:16px;}
+.report-view-title{font-size:13px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+.rv-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:13px;}
+.rv-row:last-child{border-bottom:none;}
+.rv-key{color:#888;font-weight:600;}
+.rv-val{font-weight:700;color:#183C63;text-align:right;max-width:65%;}
+
 /* ── CONTACTS ───────────────────────────────────────────── */
 .search-box{width:100%;padding:14px 16px;border:2px solid #e0e6ef;border-radius:12px;font-size:15px;margin-bottom:16px;font-family:'Montserrat',sans-serif;}
 .search-box:focus{border-color:#FFBF00;outline:none;}
@@ -354,6 +361,13 @@ textarea.form-input{resize:vertical;}
 .c-info{flex:1;}
 .c-name{font-size:14px;font-weight:700;color:#183C63;}
 .c-phone{font-size:12px;color:#888;}
+
+/* Edit request modal */
+.edit-req-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;align-items:center;justify-content:center;}
+.edit-req-overlay.open{display:flex;}
+.edit-req-box{background:#fff;border-radius:20px;padding:28px;width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);}
+.edit-req-title{font-size:18px;font-weight:800;color:#183C63;margin-bottom:8px;}
+.edit-req-sub{font-size:13px;color:#888;margin-bottom:20px;}
 
 /* ── DIALER ─────────────────────────────────────────────── */
 .dialer-wrap{max-width:320px;margin:0 auto;}
@@ -393,9 +407,7 @@ textarea.form-input{resize:vertical;}
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════
-     LOGIN
-══════════════════════════════════════════════════════════ -->
+<!-- LOGIN -->
 <div class="login-screen" id="login-screen">
   <div class="login-box">
     <div class="login-logo">
@@ -434,9 +446,7 @@ textarea.form-input{resize:vertical;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════
-     DASHBOARD
-══════════════════════════════════════════════════════════ -->
+<!-- DASHBOARD -->
 <div id="dashboard" style="display:none;">
 
   <!-- Top bar -->
@@ -518,14 +528,20 @@ textarea.form-input{resize:vertical;}
       </div>
     </div>
 
-    <!-- Pasek po-rozmowie (brak raportu) -->
+    <!-- Panel coachingowy (pkt 11) -->
+    <div class="coaching-panel" id="coaching-panel" style="display:none;">
+      <div class="coaching-title">🎓 Nad czym warto popracować</div>
+      <div class="coaching-tips" id="coaching-tips"></div>
+    </div>
+
+    <!-- Pasek po-rozmowie (pkt 1: "Uzupełnij raport") -->
     <div class="post-call-bar" id="post-call-bar">
-      <div class="pcb-icon">⏸️</div>
+      <div class="pcb-icon">📋</div>
       <div class="pcb-info">
         <div class="pcb-title" id="pcb-title">Rozmowa zakończona — uzupełnij raport</div>
-        <div class="pcb-sub" id="pcb-sub">Przejdź do zakładki „W obsłudze” i kliknij Raport przy tej rozmowie</div>
+        <div class="pcb-sub" id="pcb-sub">Kliknij przycisk aby otworzyć raport</div>
       </div>
-      <button class="pcb-btn" onclick="goToObsludze()">Uzupełnij raport →</button>
+      <button class="pcb-btn" id="pcb-btn" onclick="openReportFromPostCallBar()">📋 Uzupełnij raport</button>
     </div>
 
     <!-- Pasek aktywnego połączenia -->
@@ -651,9 +667,7 @@ textarea.form-input{resize:vertical;}
 
 </div><!-- /dashboard -->
 
-<!-- ══════════════════════════════════════════════════════════
-     REPORT OVERLAY — 2 KROKI (nowy format)
-══════════════════════════════════════════════════════════ -->
+<!-- REPORT OVERLAY -->
 <div class="overlay" id="report-overlay">
   <div class="report-panel">
     <div class="rp-header">
@@ -662,119 +676,152 @@ textarea.form-input{resize:vertical;}
     </div>
     <div class="rp-body">
 
-      <!-- Stepper 2-krokowy -->
-      <div class="stepper">
-        <div class="st-circle active" id="sc-1">1</div>
-        <div class="st-line" id="sl-1"></div>
-        <div class="st-circle" id="sc-2">2</div>
+      <!-- Podgląd wypełnionego raportu (pkt 5) -->
+      <div id="rs-view" style="display:none;">
+        <div class="report-view">
+          <div class="report-view-title">📋 Raport — podgląd</div>
+          <div id="rv-rows"></div>
+        </div>
+        <div class="step-nav">
+          <button class="btn-back" onclick="closeReport()">Zamknij</button>
+        </div>
       </div>
 
-      <!-- ─── KROK 1: Efekt rozmowy + kiedy kontakt -->
-      <div id="rs-1">
-
-        <!-- EFEKT ROZMOWY -->
-        <div class="form-group">
-          <label class="form-label rpt-section-label">EFEKT ROZMOWY</label>
-          <div class="outcome-grid">
-            <button class="outcome-btn ob-umowiony" onclick="pickOutcome(this,'umowiony_w0')">
-              <span class="ob-label">Umówił się</span>
-            </button>
-            <button class="outcome-btn ob-followup" onclick="pickOutcome(this,'followup')">
-              <span class="ob-label">PROSI O KOLEJNY KONTAKT</span>
-            </button>
-            <button class="outcome-btn ob-neg" onclick="pickOutcome(this,'rezygnacja')">
-              <span class="ob-label">Rezygnacja</span>
-            </button>
-            <button class="outcome-btn ob-neg" onclick="pickOutcome(this,'nie_kwalifikuje_sie')">
-              <span class="ob-label">Nie kwalifikuje się</span>
-            </button>
+      <!-- Wybór 4 kafelków (pkt 4: otwiera się na kafelkach jak na stronie głównej) -->
+      <div id="rs-type" style="display:none;">
+        <div class="rpt-section-label" style="margin-bottom:16px;">WYBIERZ TYP ROZMOWY</div>
+        <div class="type-grid">
+          <div class="type-btn btn-nowy" onclick="pickReportType('nowy')">
+            <span class="t-icon">➕</span>
+            <span class="t-name">Nowy Pacjent</span>
+            <span class="t-desc">Pierwszy kontakt</span>
+          </div>
+          <div class="type-btn btn-staly" onclick="pickReportType('staly')">
+            <span class="t-icon">💎</span>
+            <span class="t-name">Stały Pacjent</span>
+            <span class="t-desc">Nowa rezerwacja</span>
+          </div>
+          <div class="type-btn btn-wizyta" onclick="pickReportType('wizyta')">
+            <span class="t-icon">📅</span>
+            <span class="t-name">Aktualna Wizyta</span>
+            <span class="t-desc">Sprawa bieżąca</span>
+          </div>
+          <div class="type-btn btn-nie" onclick="pickReportTypeQuick()">
+            <span class="t-icon">⚠️</span>
+            <span class="t-name">Nie Pacjent</span>
+            <span class="t-desc">Reklama / pomyłka</span>
           </div>
         </div>
-
-        <!-- DATA WIZYTY (tylko gdy umówił się) -->
-        <div class="form-group" id="rg-visit-date" style="display:none;">
-          <label class="form-label rpt-section-label">DATA WIZYTY</label>
-          <input type="date" class="form-input" id="r-visit-date">
-        </div>
-
-        <!-- KIEDY KONTAKT (tylko gdy prosi o kolejny kontakt) -->
-        <div class="form-group" id="rg-followup-when" style="display:none;">
-          <label class="form-label rpt-section-label">ZA ILE UMÓWIONY KONTAKT</label>
-          <div class="choice-group">
-            <button class="choice-btn" onclick="pick(this,'followup_when','jutro')">JUTRO</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','pojutrze')">POJUTRZE</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','2dni')">ZA 2 DNI</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','3dni')">ZA 3 DNI</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','5dni')">ZA 5 DNI</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','tydzien')">ZA TYDZIEŃ</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','inna_data')">INNA DATA</button>
-            <button class="choice-btn" onclick="pick(this,'followup_when','bez_daty')">BEZ DATY</button>
-          </div>
-          <!-- Inna data -->
-          <div id="rg-followup-date" style="display:none;margin-top:10px;">
-            <input type="date" class="form-input" id="r-followup-date" placeholder="Wybierz datę">
-          </div>
-        </div>
-
-        <!-- POWÓD REZYGNACJI / BRAKU KWALIFIKACJI -->
-        <div class="form-group" id="rg-reason-neg" style="display:none;">
-          <label class="form-label rpt-section-label" id="rg-reason-neg-label">POWÓD REZYGNACJI</label>
-          <textarea class="form-input" id="r-reason-neg" rows="2" placeholder="Wpisz powód..."></textarea>
-        </div>
-
         <div class="step-nav">
           <button class="btn-back" onclick="closeReport()">Anuluj</button>
-          <button class="btn-next" id="btn-step1-next" onclick="goStep(2)" disabled>Dalej →</button>
         </div>
       </div>
 
-      <!-- ─── KROK 2: Źródło + imię/nazwisko -->
-      <div id="rs-2" style="display:none;">
-
-        <!-- ŹRÓDŁO LEADA -->
-        <div class="form-group">
-          <label class="form-label rpt-section-label">ŹRÓDŁO LEADA</label>
-          <div class="choice-group">
-            <button class="choice-btn" onclick="pickSource(this,'google')">Google</button>
-            <button class="choice-btn" onclick="pickSource(this,'facebook')">Facebook</button>
-            <button class="choice-btn" onclick="pickSource(this,'instagram')">Instagram</button>
-            <button class="choice-btn" onclick="pickSource(this,'polecenie')">Polecenie</button>
-            <button class="choice-btn" onclick="pickSource(this,'strona')">Strona www</button>
-            <button class="choice-btn" onclick="pickSource(this,'inne')">Inne</button>
-          </div>
+      <!-- Stepper 2-krokowy -->
+      <div id="rs-stepper" style="display:none;">
+        <div class="stepper">
+          <div class="st-circle active" id="sc-1">1</div>
+          <div class="st-line" id="sl-1"></div>
+          <div class="st-circle" id="sc-2">2</div>
         </div>
 
-        <!-- POLECENIE: imię i nazwisko polecającego -->
-        <div class="form-group" id="rg-referral" style="display:none;">
-          <label class="form-label">Imię i nazwisko osoby polecającej</label>
-          <input type="text" class="form-input" id="r-referred" placeholder="np. Jan Kowalski / Dr Nowak">
-        </div>
-
-        <!-- IMIĘ I NAZWISKO -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+        <!-- KROK 1: Efekt rozmowy -->
+        <div id="rs-1">
           <div class="form-group">
-            <label class="form-label">Imię</label>
-            <input type="text" class="form-input" id="r-firstname" placeholder="np. Anna">
+            <label class="form-label rpt-section-label">EFEKT ROZMOWY</label>
+            <div class="outcome-grid">
+              <button class="outcome-btn ob-umowiony" onclick="pickOutcome(this,'umowiony_w0')">
+                <span class="ob-label">Umówił się</span>
+              </button>
+              <button class="outcome-btn ob-followup" onclick="pickOutcome(this,'followup')">
+                <span class="ob-label">PROSI O KOLEJNY KONTAKT</span>
+              </button>
+              <button class="outcome-btn ob-neg" onclick="pickOutcome(this,'rezygnacja')">
+                <span class="ob-label">Rezygnacja</span>
+              </button>
+              <button class="outcome-btn ob-neg" onclick="pickOutcome(this,'nie_kwalifikuje_sie')">
+                <span class="ob-label">Nie kwalifikuje się</span>
+              </button>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Nazwisko</label>
-            <input type="text" class="form-input" id="r-lastname" placeholder="np. Kowalska">
-          </div>
-        </div>
-        <input type="hidden" id="r-phone">
-        <input type="hidden" id="r-notes">
 
-        <div class="step-nav">
-          <button class="btn-back" onclick="goStep(1)">← Wróć</button>
-          <button class="btn-save" onclick="saveReport()">✓ Zapisz i wyślij do Navigatora</button>
+          <div class="form-group" id="rg-visit-date" style="display:none;">
+            <label class="form-label rpt-section-label">DATA WIZYTY</label>
+            <input type="date" class="form-input" id="r-visit-date">
+          </div>
+
+          <div class="form-group" id="rg-followup-when" style="display:none;">
+            <label class="form-label rpt-section-label">ZA ILE UMÓWIONY KONTAKT</label>
+            <div class="choice-group">
+              <button class="choice-btn" onclick="pick(this,'followup_when','jutro')">JUTRO</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','pojutrze')">POJUTRZE</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','2dni')">ZA 2 DNI</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','3dni')">ZA 3 DNI</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','5dni')">ZA 5 DNI</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','tydzien')">ZA TYDZIEŃ</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','inna_data')">INNA DATA</button>
+              <button class="choice-btn" onclick="pick(this,'followup_when','bez_daty')">BEZ DATY</button>
+            </div>
+            <div id="rg-followup-date" style="display:none;margin-top:10px;">
+              <input type="date" class="form-input" id="r-followup-date">
+            </div>
+          </div>
+
+          <div class="form-group" id="rg-reason-neg" style="display:none;">
+            <label class="form-label rpt-section-label" id="rg-reason-neg-label">POWÓD REZYGNACJI</label>
+            <textarea class="form-input" id="r-reason-neg" rows="2" placeholder="Wpisz powód..."></textarea>
+          </div>
+
+          <div class="step-nav">
+            <button class="btn-back" onclick="closeReport()">Anuluj</button>
+            <button class="btn-next" id="btn-step1-next" onclick="goStep(2)" disabled>Dalej →</button>
+          </div>
         </div>
-      </div>
+
+        <!-- KROK 2: Źródło + imię/nazwisko -->
+        <div id="rs-2" style="display:none;">
+          <div class="form-group">
+            <label class="form-label rpt-section-label">ŹRÓDŁO LEADA</label>
+            <div class="choice-group">
+              <button class="choice-btn" onclick="pickSource(this,'google')">Google</button>
+              <button class="choice-btn" onclick="pickSource(this,'facebook')">Facebook</button>
+              <button class="choice-btn" onclick="pickSource(this,'instagram')">Instagram</button>
+              <button class="choice-btn" onclick="pickSource(this,'polecenie')">Polecenie</button>
+              <button class="choice-btn" onclick="pickSource(this,'strona')">Strona www</button>
+              <button class="choice-btn" onclick="pickSource(this,'inne')">Inne</button>
+            </div>
+          </div>
+
+          <div class="form-group" id="rg-referral" style="display:none;">
+            <label class="form-label">Imię i nazwisko osoby polecającej</label>
+            <input type="text" class="form-input" id="r-referred" placeholder="np. Jan Kowalski / Dr Nowak">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+            <div class="form-group">
+              <label class="form-label">Imię</label>
+              <input type="text" class="form-input" id="r-firstname" placeholder="np. Anna">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nazwisko</label>
+              <input type="text" class="form-input" id="r-lastname" placeholder="np. Kowalska">
+            </div>
+          </div>
+          <input type="hidden" id="r-phone">
+          <input type="hidden" id="r-notes">
+
+          <div class="step-nav">
+            <button class="btn-back" onclick="goStep(1)">← Wróć</button>
+            <button class="btn-save" onclick="saveReport()">✓ Zapisz i wyślij do Navigatora</button>
+          </div>
+        </div>
+      </div><!-- /rs-stepper -->
 
     </div>
   </div>
 </div>
 
-<!-- ══ ADD CONTACT MODAL ══ -->
+<!-- ADD CONTACT MODAL -->
 <div class="modal-overlay" id="add-modal">
   <div class="modal-box">
     <div class="modal-title">➕ Dodaj kontakt do GHL</div>
@@ -806,9 +853,29 @@ textarea.form-input{resize:vertical;}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════
-     JAVASCRIPT
-══════════════════════════════════════════════════════════ -->
+<!-- EDIT REQUEST MODAL (pkt 7) -->
+<div class="edit-req-overlay" id="edit-req-modal">
+  <div class="edit-req-box">
+    <div class="edit-req-title">✏️ Zgłoś zmianę danych kontaktu</div>
+    <div class="edit-req-sub">Opisz co chcesz zmienić — Sonia zaktualizuje dane w GoHighLevel.</div>
+    <input type="hidden" id="er-contact-id">
+    <input type="hidden" id="er-contact-name">
+    <div class="form-group">
+      <label class="form-label">Kontakt</label>
+      <div id="er-contact-display" style="padding:10px 14px;background:#f0f2f8;border-radius:10px;font-weight:700;color:#183C63;font-size:14px;"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Co chcesz zmienić?</label>
+      <textarea class="form-input" id="er-change-request" rows="4" placeholder="np. Zmień numer telefonu na +48 600 123 456&#10;Zmień imię na Katarzyna&#10;Dodaj email: jan@kowalski.pl"></textarea>
+    </div>
+    <div class="step-nav">
+      <button class="btn-back" onclick="closeEditReqModal()">Anuluj</button>
+      <button class="btn-save" onclick="submitEditRequest()">✓ Wyślij zgłoszenie do Soni</button>
+    </div>
+  </div>
+</div>
+
+<!-- JAVASCRIPT -->
 <script>
 // ─── STATE ──────────────────────────────────────────────────────────────────
 let currentUser = null;
@@ -822,12 +889,12 @@ let callStartTime = null;
 let dialerNum = '';
 
 // Dane formularza
-let rpt = { type:'', reason:'', temp:'', objections:[], outcome:'', source:'', treatment:'' };
+let rpt = { type:'', reason:'', temp:'', objections:[], outcome:'', source:'', followup_when:'' };
 
 // Liczniki dzienne
 let dayCounts = { nowy:0, staly:0, wizyta:0, nie_pacjent:0 };
 
-// Lokalna lista kontaktów (cache z GHL + osoby z raportów)
+// Lokalna lista kontaktów
 let localContacts = [];
 
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
@@ -881,10 +948,10 @@ function showDashboard() {
   loadNewLeads();
   loadOpenCalls();
   loadClosedCalls();
-  loadAllContacts(); // wczytaj kontakty z GHL do lokalnego cache
+  loadAllContacts();
   setInterval(loadNewLeads, 30000);
   setInterval(loadDailyStats, 60000);
-  setInterval(loadAllContacts, 120000); // odśwież kontakty co 2 minuty
+  setInterval(loadAllContacts, 120000);
 }
 
 // ─── WEBSOCKET ───────────────────────────────────────────────────────────────
@@ -909,7 +976,6 @@ function handleWS(msg) {
       break;
 
     case 'CALL_RINGING':
-      // Nowe połączenie przychodzące — automatycznie aktywuj przyciski
       activeCallId = msg.call.call_id;
       openCalls.unshift(msg.call);
       renderOpenCalls(); renderRecentCalls(); updateBadges();
@@ -921,7 +987,6 @@ function handleWS(msg) {
     case 'CALL_ANSWERED':
       updateCallField(msg.callId, 'status', 'answered');
       renderOpenCalls(); renderRecentCalls();
-      // Upewnij się że przyciski są aktywne
       if (!activeCallId) activeCallId = msg.callId;
       unlockButtons();
       break;
@@ -931,13 +996,11 @@ function handleWS(msg) {
       updateCallField(msg.callId, 'duration_seconds', msg.duration);
       renderOpenCalls(); renderRecentCalls(); updateBadges();
       clearCallTimer();
-      // Przejdź do STANU 2: po-rozmowie bez raportu
+      // pkt 1: po zakończeniu — pokaż "Uzupełnij raport" zamiast migającego stanu
       const endedCall = openCalls.find(c => c.call_id === msg.callId);
       if (activeCallId === msg.callId) {
-        // Ukryj świecący pasek, pokaż powiększony panel po-rozmowie
         document.getElementById('active-call-bar').classList.remove('visible');
         showPostCallBar(endedCall);
-        // Przyciski aktywne ale bez pulsowania
         unlockButtonsPostCall();
       }
       break;
@@ -950,17 +1013,17 @@ function handleWS(msg) {
 
     case 'CALL_TOPIC_CLOSED':
       openCalls = openCalls.filter(c => c.call_id !== msg.callId);
-      // STAN 3: zakończono temat — ukryj wszystko
+      // pkt 1: po zamknięciu tematu — ukryj wszystko i odśwież
       if (activeCallId === msg.callId) {
         activeCallId = null;
         lockButtons();
-        hideActiveBar(); // ukrywa oba paski
+        hideActiveBar();
         clearCallTimer();
       } else {
-        // Może był w stanie post-call — sprawdź czy nie ma innych otwartych
         const stillPending = openCalls.find(c => !c.call_effect && !c.topic_closed);
         if (!stillPending) { lockButtons(); hideActiveBar(); }
       }
+      // pkt 1: zamknięty temat znika ze strony głównej i trafia do Zamkniętych
       renderOpenCalls(); renderRecentCalls(); updateBadges(); loadClosedCalls();
       break;
 
@@ -968,7 +1031,6 @@ function handleWS(msg) {
       updateCallField(msg.callId, 'call_effect', msg.callEffect);
       updateCallField(msg.callId, 'contact_type', msg.contactType);
       renderOpenCalls(); renderRecentCalls(); loadDailyStats();
-      // Raport zapisany — jeśli to był aktywny temat, ukryj panel post-call
       if (activeCallId === msg.callId || document.getElementById('post-call-bar').classList.contains('visible')) {
         const stillPending = openCalls.find(c => !c.call_effect && !c.topic_closed && c.call_id !== msg.callId);
         if (!stillPending) { lockButtons(); hideActiveBar(); activeCallId = null; }
@@ -976,7 +1038,6 @@ function handleWS(msg) {
       break;
 
     case 'CONTACT_UPSERTED':
-      // Dodaj lub zaktualizuj kontakt w lokalnej liście
       upsertLocalContact(msg.contact);
       break;
   }
@@ -988,7 +1049,6 @@ function updateCallField(callId, field, value) {
 }
 
 // ─── ACTIVE CALL BAR ─────────────────────────────────────────────────────────
-// STAN 1: Aktywne połączenie — świeci, pulsuje
 function showActiveBar(call, status) {
   document.getElementById('post-call-bar').classList.remove('visible');
   const bar = document.getElementById('active-call-bar');
@@ -996,34 +1056,30 @@ function showActiveBar(call, status) {
   document.getElementById('acb-meta').textContent =
     (call.caller_phone || '') + (status === 'ringing' ? ' · Dzwoni...' : ' · Połączono');
   bar.classList.add('visible');
-  document.getElementById('cockpit-hint').textContent =
-    '✅ Połączenie aktywne — wybierz typ rozmowy po zakończeniu';
+  document.getElementById('cockpit-hint').textContent = '✅ Połączenie aktywne — wybierz typ rozmowy po zakończeniu';
 }
 
-// STAN 2: Po-rozmowie bez raportu — powiększony panel, brak pulsowania
+// pkt 1: Po-rozmowie — pokaż "Uzupełnij raport" z przyciskiem otwierającym raport
 function showPostCallBar(call) {
   document.getElementById('active-call-bar').classList.remove('visible');
   const name = call ? (call.patient_name || call.caller_phone || 'Nieznany numer') : 'Nieznany numer';
   const phone = call ? (call.caller_phone || '') : '';
-  document.getElementById('pcb-title').textContent = `Rozmowa z ${name} zakończona — uzupełnij raport`;
-  document.getElementById('pcb-sub').textContent = `${phone ? phone + ' · ' : ''}Przejdź do zakładki „W obsłudze” i kliknij Raport`;
+  document.getElementById('pcb-title').textContent = `Rozmowa z ${name} zakończona`;
+  document.getElementById('pcb-sub').textContent = `${phone ? phone + ' · ' : ''}Kliknij aby uzupełnić raport`;
   document.getElementById('post-call-bar').classList.add('visible');
-  document.getElementById('cockpit-hint').textContent =
-    '⏸️ Rozmowa zakończona — raport można uzupełnić z zakładki W obsłudze';
+  document.getElementById('cockpit-hint').textContent = '⏸️ Rozmowa zakończona — uzupełnij raport';
 }
 
-// STAN 3: Brak aktywnej rozmowy — wszystko ukryte
 function hideActiveBar() {
   document.getElementById('active-call-bar').classList.remove('visible');
   document.getElementById('post-call-bar').classList.remove('visible');
-  document.getElementById('cockpit-hint').textContent =
-    'Przyciski aktywują się automatycznie gdy odbierasz połączenie';
+  document.getElementById('cockpit-hint').textContent = 'Przyciski aktywują się automatycznie gdy odbierasz połączenie';
 }
 
-// Przejśdź do zakładki W obsłudze
-function goToObsludze() {
-  const tab = document.querySelector('.tab[onclick*="open"]');
-  if (tab) { tab.click(); }
+// pkt 1: Kliknięcie "Uzupełnij raport" na pasku post-call — otwiera raport z kafelkami
+function openReportFromPostCallBar() {
+  if (!activeCallId) return;
+  openReportFor(activeCallId);
 }
 
 function startCallTimer() {
@@ -1041,8 +1097,7 @@ function clearCallTimer() {
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
 }
 
-// ─── BUTTONS LOCK / UNLOCK ────────────────────────────────────────────────────────────────────────────────
-// Odblokuj z pulsowaniem (aktywne połączenie)
+// ─── BUTTONS LOCK / UNLOCK ────────────────────────────────────────────────────
 function unlockButtons() {
   ['btn-nowy','btn-staly','btn-wizyta','btn-nie'].forEach(id => {
     const el = document.getElementById(id);
@@ -1051,7 +1106,6 @@ function unlockButtons() {
   });
 }
 
-// Odblokuj bez pulsowania (po-rozmowie, oczekuje na raport)
 function unlockButtonsPostCall() {
   ['btn-nowy','btn-staly','btn-wizyta','btn-nie'].forEach(id => {
     const el = document.getElementById(id);
@@ -1060,7 +1114,6 @@ function unlockButtonsPostCall() {
   });
 }
 
-// Zablokuj (brak rozmowy)
 function lockButtons() {
   ['btn-nowy','btn-staly','btn-wizyta','btn-nie'].forEach(id => {
     const el = document.getElementById(id);
@@ -1070,23 +1123,20 @@ function lockButtons() {
 }
 
 function checkActiveCall() {
-  // STAN 1: aktywne połączenie (dzwoni lub odebrane)
   const ringing = openCalls.find(c => c.status === 'ringing' || c.status === 'answered');
   if (ringing) {
     activeCallId = ringing.call_id;
-    unlockButtons(); // z pulsowaniem
+    unlockButtons();
     showActiveBar(ringing, ringing.status);
     return;
   }
-  // STAN 2: zakończona rozmowa bez raportu
   const pending = openCalls.find(c => !c.call_effect && !c.topic_closed && c.status !== 'ringing');
   if (pending) {
     activeCallId = pending.call_id;
-    unlockButtonsPostCall(); // bez pulsowania
+    unlockButtonsPostCall();
     showPostCallBar(pending);
     return;
   }
-  // STAN 3: brak aktywnej rozmowy
   lockButtons();
   hideActiveBar();
 }
@@ -1109,7 +1159,7 @@ function updateBadges() {
   else ob.style.display = 'none';
 }
 
-// ─── PLAYER ────────────────────────────────────────────────────────────────────────────────
+// ─── PLAYER (pkt 9) ──────────────────────────────────────────────────────────
 function togglePlayer(btn, callId, url) {
   const slot = document.getElementById('player-' + callId);
   if (!slot) return;
@@ -1125,12 +1175,56 @@ function togglePlayer(btn, callId, url) {
   }
 }
 
-// ─── REPORT FORM ────────────────────────────────────────────────────────────────────────────────
+// ─── REPORT FORM ─────────────────────────────────────────────────────────────
+
+// Otwórz raport z kokpitu (przyciski 4 kafelków)
 function startReport(type) {
   if (!activeCallId) { alert('Brak aktywnego połączenia'); return; }
-  rpt = { type, outcome:'', source:'', followup_when:'' };
+  initReportForm(activeCallId, type);
+  showReportStepper();
+}
 
-  const call = openCalls.find(c => c.call_id === activeCallId);
+// pkt 4: Otwórz raport z zakładki W obsłudze — zaczyna od wyboru 4 kafelków
+function openReportFor(callId) {
+  activeCallId = callId;
+  const call = openCalls.find(c => c.call_id === callId);
+
+  // pkt 5: Jeśli raport był już wypełniony — pokaż podgląd (tylko odczyt)
+  if (call && call.call_effect) {
+    showReportView(call);
+    document.getElementById('report-overlay').classList.add('open');
+    return;
+  }
+
+  // Nowy raport — pokaż wybór 4 kafelków
+  initReportFormFields(call);
+  showReportTypeSelector();
+  document.getElementById('report-overlay').classList.add('open');
+}
+
+// pkt 4: Wybór kafelka z selektora w raporcie
+function pickReportType(type) {
+  initReportForm(activeCallId, type);
+  showReportStepper();
+}
+
+function pickReportTypeQuick() {
+  // "Nie Pacjent" z selektora — od razu zapisz
+  closeReport();
+  quickReportForCall(activeCallId);
+}
+
+function initReportForm(callId, type) {
+  const call = openCalls.find(c => c.call_id === callId);
+  rpt = { type, outcome:'', source:'', followup_when:'' };
+  initReportFormFields(call);
+  const labels = { nowy:'➕ Nowy Pacjent', staly:'💎 Stały Pacjent', wizyta:'📅 Aktualna Wizyta' };
+  document.getElementById('rp-title').textContent = labels[type] || 'Raport';
+  document.getElementById('btn-step1-next').disabled = true;
+  goStep(1);
+}
+
+function initReportFormFields(call) {
   const nameParts = call && call.patient_name ? call.patient_name.split(' ') : [];
   document.getElementById('r-firstname').value = nameParts[0] || '';
   document.getElementById('r-lastname').value = nameParts.slice(1).join(' ') || '';
@@ -1139,29 +1233,81 @@ function startReport(type) {
   document.getElementById('r-reason-neg').value = '';
   document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('sel'));
   document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('sel'));
-  // Ukryj pola warunkowe
   ['rg-visit-date','rg-followup-when','rg-reason-neg','rg-referral'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
+}
 
-  const labels = { nowy:'➕ Nowy Pacjent', staly:'💎 Stały Pacjent', wizyta:'📅 Aktualna Wizyta' };
-  document.getElementById('rp-title').textContent = labels[type] || 'Raport';
-  document.getElementById('btn-step1-next').disabled = true;
+function showReportTypeSelector() {
+  document.getElementById('rs-view').style.display = 'none';
+  document.getElementById('rs-type').style.display = 'block';
+  document.getElementById('rs-stepper').style.display = 'none';
+  document.getElementById('rp-title').textContent = 'Raport rozmowy';
+}
 
-  goStep(1);
-  document.getElementById('report-overlay').classList.add('open');
+function showReportStepper() {
+  document.getElementById('rs-view').style.display = 'none';
+  document.getElementById('rs-type').style.display = 'none';
+  document.getElementById('rs-stepper').style.display = 'block';
+}
+
+// pkt 5: Podgląd wypełnionego raportu (tylko odczyt)
+function showReportView(call) {
+  document.getElementById('rs-view').style.display = 'block';
+  document.getElementById('rs-type').style.display = 'none';
+  document.getElementById('rs-stepper').style.display = 'none';
+  document.getElementById('rp-title').textContent = '📋 Podgląd raportu';
+
+  const effectMap = {
+    umowiony_w0: 'Wizyta umówiona (W0)',
+    followup: 'Follow-up — kolejny kontakt',
+    brak_decyzji: 'Brak decyzji',
+    nie_odebral: 'Nieodebrane',
+    nie_kwalifikuje_sie: 'Nie kwalifikuje się',
+    rezygnacja: 'Rezygnacja',
+    nie_pacjent: 'Nie pacjent',
+  };
+  const typeMap = { nowy:'Nowy pacjent', staly:'Stały pacjent', wizyta:'Aktualna wizyta', nie_pacjent:'Nie pacjent' };
+
+  // pkt 10: czas odebrania
+  let pickupTime = '—';
+  if (call.answered_at && call.created_at) {
+    const secs = Math.round((new Date(call.answered_at) - new Date(call.created_at)) / 1000);
+    pickupTime = secs >= 0 ? `${secs}s` : '—';
+  }
+
+  const rows = [
+    ['Pacjent', call.patient_name || '—'],
+    ['Telefon', call.caller_phone || '—'],
+    ['Typ kontaktu', typeMap[call.contact_type] || call.contact_type || '—'],
+    ['Efekt rozmowy', effectMap[call.call_effect] || call.call_effect || '—'],
+    ['Źródło', call.source || '—'],
+    ['Polecony przez', call.referred_by || '—'],
+    ['Notatki', call.notes || '—'],
+    ['Czas odebrania', pickupTime],
+    ['Czas rozmowy', call.duration_seconds ? `${Math.floor(call.duration_seconds/60)}m ${call.duration_seconds%60}s` : '—'],
+    ['Godzina', new Date(call.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})],
+  ];
+
+  document.getElementById('rv-rows').innerHTML = rows.map(([k,v]) =>
+    `<div class="rv-row"><span class="rv-key">${k}</span><span class="rv-val">${v}</span></div>`
+  ).join('');
 }
 
 async function quickReport() {
-  // "Nie Pacjent" — szybki zapis bez formularza
   if (!activeCallId) { alert('Brak aktywnego połączenia'); return; }
+  await quickReportForCall(activeCallId);
+}
+
+async function quickReportForCall(callId) {
+  if (!callId) return;
   if (!confirm('Oznaczyć jako "Nie Pacjent" i zamknąć temat?')) return;
   try {
     const r = await fetch('/api/call/outcome', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        callId: activeCallId,
+        callId,
         contactType: 'nie_pacjent',
         callEffect: 'nie_kwalifikuje_sie',
         userId: currentUser.id,
@@ -1191,28 +1337,18 @@ function goStep(step) {
   if (sl1) sl1.classList.toggle('done', step > 1);
 }
 
-// Single-select
 function pick(btn, field, val) {
   btn.closest('.choice-group').querySelectorAll('.choice-btn:not(.multi)').forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
   rpt[field] = val;
 }
 
-// Multi-select
-function tog(btn, field, val) {
-  btn.classList.toggle('sel');
-  if (rpt[field].includes(val)) rpt[field] = rpt[field].filter(v => v !== val);
-  else rpt[field].push(val);
-}
-
-// Outcome — z logiką warunkową
 function pickOutcome(btn, val) {
   document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
   rpt.outcome = val;
   document.getElementById('btn-step1-next').disabled = false;
 
-  // Pokaż/ukryj pola warunkowe
   const showVisit    = val === 'umowiony_w0';
   const showFollowup = val === 'followup';
   const showNeg      = val === 'rezygnacja' || val === 'nie_kwalifikuje_sie';
@@ -1225,21 +1361,8 @@ function pickOutcome(btn, val) {
     document.getElementById('rg-reason-neg-label').textContent =
       val === 'rezygnacja' ? 'POWÓD REZYGNACJI' : 'POWÓD BRAKU KWALIFIKACJI';
   }
-
-  // Inna data w followup
-  const followupWhen = document.getElementById('rg-followup-when');
-  if (followupWhen) {
-    followupWhen.querySelectorAll('.choice-btn').forEach(b => {
-      b.onclick = function() {
-        pick(this, 'followup_when', this.textContent.toLowerCase().replace(/ /g,'_'));
-        const isInna = this.textContent === 'INNA DATA';
-        document.getElementById('rg-followup-date').style.display = isInna ? 'block' : 'none';
-      };
-    });
-  }
 }
 
-// Źródło leada — z logiką polecenia
 function pickSource(btn, val) {
   btn.closest('.choice-group').querySelectorAll('.choice-btn').forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
@@ -1249,31 +1372,6 @@ function pickSource(btn, val) {
   if (!showRef) document.getElementById('r-referred').value = '';
 }
 
-function buildSummary() {
-  const outcomeLabels = {
-    umowiony_w0: '✅ Wizyta umówiona → Etap 8 GHL',
-    followup: '🔔 Follow-up → Etap 7 GHL',
-    brak_decyzji: '⏸️ Brak decyzji → Etap 7 GHL',
-    nie_odebral: '📵 Nieodebrane → Etap 2 GHL',
-    nie_kwalifikuje_sie: '❌ Nie kwalifikuje się → Etap 6 GHL',
-    rezygnacja: '🚫 Rezygnacja → Etap 6 GHL',
-  };
-  const typeLabels = { nowy:'Nowy pacjent', staly:'Stały pacjent', wizyta:'Aktualna wizyta' };
-  const rows = [
-    ['Typ kontaktu', typeLabels[rpt.type] || rpt.type],
-    ['Powód', rpt.reason || '—'],
-    ['Temperatura', rpt.temp || '—'],
-    ['Wynik rozmowy', outcomeLabels[rpt.outcome] || rpt.outcome || '—'],
-    ['Obiekcje', rpt.objections.join(', ') || '—'],
-    ['Imię', document.getElementById('r-firstname').value || '—'],
-    ['Nazwisko', document.getElementById('r-lastname').value || '—'],
-    ['Telefon', document.getElementById('r-phone').value || '—'],
-  ];
-  document.getElementById('summary-box').innerHTML = rows.map(([k,v]) =>
-    `<div class="summary-row"><span class="summary-key">${k}</span><span class="summary-val">${v}</span></div>`
-  ).join('');
-}
-
 async function saveReport() {
   const callId = activeCallId;
   if (!callId) { alert('Brak aktywnego połączenia'); return; }
@@ -1281,23 +1379,11 @@ async function saveReport() {
 
   const firstName = document.getElementById('r-firstname').value.trim();
   const lastName  = document.getElementById('r-lastname').value.trim();
-
-  // Pobierz datę wizyty
-  const visitDateEl = document.getElementById('r-visit-date');
-  const visitDate = visitDateEl ? visitDateEl.value : '';
-
-  // Pobierz datę followup
-  const followupDateEl = document.getElementById('r-followup-date');
-  const followupDate = followupDateEl ? followupDateEl.value : '';
-
-  // Powód rezygnacji / braku kwalifikacji
-  const reasonNegEl = document.getElementById('r-reason-neg');
-  const reasonNeg = reasonNegEl ? reasonNegEl.value.trim() : '';
-
-  // Polecający
+  const visitDate = document.getElementById('r-visit-date')?.value || '';
+  const followupDate = document.getElementById('r-followup-date')?.value || '';
+  const reasonNeg = document.getElementById('r-reason-neg')?.value.trim() || '';
   const referredBy = document.getElementById('r-referred').value.trim();
 
-  // Notatka z danych
   const noteLines = [];
   if (rpt.followup_when) noteLines.push(`Kiedy kontakt: ${rpt.followup_when}`);
   if (followupDate) noteLines.push(`Data kontaktu: ${followupDate}`);
@@ -1311,16 +1397,13 @@ async function saveReport() {
     contactType: rpt.type,
     callEffect: rpt.outcome,
     userId: currentUser.id,
-    firstName,
-    lastName,
+    firstName, lastName,
     patientName: [firstName, lastName].filter(Boolean).join(' '),
     notes: noteLines.join(' | '),
     source: rpt.source,
-    referredBy,
-    visitDate,
+    referredBy, visitDate,
     followupWhen: rpt.followup_when,
-    followupDate,
-    reasonNeg,
+    followupDate, reasonNeg,
     bookedVisit: rpt.outcome === 'umowiony_w0',
   };
 
@@ -1333,7 +1416,7 @@ async function saveReport() {
     if (d.success) {
       closeReport();
       lockButtons(); hideActiveBar(); clearCallTimer();
-      // Usuń z listy W obsłudze lokalnie (WebSocket CALL_TOPIC_CLOSED też to zrobi)
+      // pkt 1: po zapisaniu raportu — usuń z W obsłudze (trafi do Zamkniętych przez WS)
       openCalls = openCalls.filter(c => c.call_id !== callId);
       activeCallId = null;
       renderOpenCalls(); renderRecentCalls(); updateBadges();
@@ -1357,6 +1440,7 @@ async function loadNewLeads() {
   } catch(e) { console.error(e); }
 }
 
+// pkt 3: ikona słuchawki przy każdym nowym zgłoszeniu
 function renderNewLeads() {
   const el = document.getElementById('new-leads-list');
   if (!newLeads.length) { el.innerHTML = '<div class="empty-state">Brak nowych zgłoszeń z GHL (Etap 1)</div>'; return; }
@@ -1368,11 +1452,11 @@ function renderNewLeads() {
       <div class="lead-badge ${urgent ? 'urgent' : ''}">${urgent ? '⚠️ >2h!' : 'NOWE'}</div>
       <div class="ci-info">
         <div class="ci-name">${lead.name || 'Brak imienia'}</div>
-        <div class="ci-phone">${lead.phone || 'Brak numeru'}${urgent ? ' — PILNE! Skontaktuj się natychmiast' : ''}</div>
+        <div class="ci-phone">${lead.phone || 'Brak numeru'}${urgent ? ' — PILNE!' : ''}</div>
         <div class="ci-phone" style="color:#aaa;">${new Date(lead.createdAt).toLocaleString('pl-PL',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}</div>
       </div>
       <div class="ci-actions">
-        ${lead.phone ? `<button class="act-btn act-primary" onclick="dialNumber('${lead.phone}')">📞 Zadzwoń</button>` : ''}
+        ${lead.phone ? `<button class="act-btn act-primary" onclick="dialNumber('${lead.phone}')" title="Zadzwoń">📞 Zadzwoń</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1391,17 +1475,86 @@ async function loadOpenCalls() {
 function renderOpenCalls() {
   const el = document.getElementById('open-calls-list');
   if (!openCalls.length) { el.innerHTML = '<div class="empty-state">Brak otwartych tematów</div>'; return; }
-  el.innerHTML = openCalls.map(c => buildCallItem(c, false)).join('');
+
+  // pkt 8: grupowanie nieodebranych od jednego numeru
+  const missedByPhone = {};
+  const others = [];
+  openCalls.forEach(c => {
+    if (c.status === 'no-answer' && !c.call_effect) {
+      const phone = c.caller_phone || 'unknown';
+      if (!missedByPhone[phone]) missedByPhone[phone] = [];
+      missedByPhone[phone].push(c);
+    } else {
+      others.push(c);
+    }
+  });
+
+  let html = '';
+
+  // Grupowane nieodebrane
+  Object.entries(missedByPhone).forEach(([phone, calls]) => {
+    if (calls.length === 1) {
+      // Tylko jeden — pokaż normalnie
+      html += buildCallItem(calls[0], false);
+    } else {
+      // Wiele — grupuj
+      const name = calls[0].patient_name || phone;
+      html += buildMissedGroup(phone, name, calls);
+    }
+  });
+
+  // Pozostałe połączenia
+  others.forEach(c => { html += buildCallItem(c, false); });
+
+  el.innerHTML = html;
+}
+
+// pkt 8: Buduj grupę nieodebranych
+function buildMissedGroup(phone, name, calls) {
+  const groupId = 'mg_' + phone.replace(/[^0-9]/g,'');
+  const items = calls.map(c => {
+    const t = new Date(c.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="mg-item"><span class="mg-item-time">${t}</span> — ${c.caller_phone || phone}</div>`;
+  }).join('');
+
+  return `<div class="missed-group">
+    <div class="missed-group-header" onclick="toggleMissedGroup('${groupId}')">
+      <div class="mg-badge">📵 NIEODEBRANE</div>
+      <div class="mg-info">
+        <div class="mg-name">${name}</div>
+        <div class="mg-count">${calls.length}× nieodebrane od tego numeru</div>
+      </div>
+      <div class="ci-actions">
+        ${phone !== 'unknown' ? `<button class="act-btn act-primary" onclick="event.stopPropagation();dialNumber('${phone}')" title="Zadzwoń">📞 Oddzwoń</button>` : ''}
+        <button class="act-btn act-report" onclick="event.stopPropagation();openReportFor('${calls[0].call_id}')">📋 Raport</button>
+      </div>
+      <div class="mg-toggle" id="${groupId}-toggle">▼</div>
+    </div>
+    <div class="missed-group-body" id="${groupId}-body">
+      ${items}
+    </div>
+  </div>`;
+}
+
+function toggleMissedGroup(groupId) {
+  const body = document.getElementById(groupId + '-body');
+  const toggle = document.getElementById(groupId + '-toggle');
+  if (!body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if (toggle) toggle.classList.toggle('open', !isOpen);
 }
 
 function buildCallItem(c, closed) {
-  const isRinging = c.status === 'ringing';
+  const isRinging  = c.status === 'ringing';
   const isAnswered = c.status === 'answered';
-  const isMissed = c.status === 'no-answer';
+  const isMissed   = c.status === 'no-answer';
+  const needsReport = !closed && !c.call_effect && (isMissed || isAnswered || c.status === 'ended');
 
-  const stateClass = closed ? 'is-closed' : isRinging ? 'is-ringing' : isAnswered ? 'is-answered' : isMissed ? 'is-missed' : '';
-  const badgeClass = closed ? 'cib-closed' : isRinging ? 'cib-ringing' : isAnswered ? 'cib-answered' : isMissed ? 'cib-missed' : 'cib-answered';
-  const badgeText = closed ? 'ZAMKNIĘTE' : isRinging ? '📞 DZWONI' : isAnswered ? '✅ Odebrane' : isMissed ? '📵 Nieodebrane' : '✅ Zakończone';
+  const stateClass = closed ? 'is-closed' : isRinging ? 'is-ringing' : isAnswered ? 'is-answered' : isMissed ? 'is-missed' : needsReport ? 'needs-report' : '';
+  const badgeClass = closed ? 'cib-closed' : isRinging ? 'cib-ringing' : isAnswered ? 'cib-answered' : isMissed ? 'cib-missed' : needsReport ? 'cib-report' : 'cib-answered';
+  // pkt 1: po zakończeniu bez raportu — badge "UZUPEŁNIJ RAPORT"
+  const badgeText = closed ? 'ZAMKNIĘTE' : isRinging ? '📞 DZWONI' : isAnswered ? '✅ Odebrane' : isMissed ? '📵 Nieodebrane' : needsReport ? '📋 UZUPEŁNIJ RAPORT' : '✅ Zakończone';
 
   const effectMap = {
     umowiony_w0: ['✅ Wizyta W0 (Etap 8)', 'ci-effect'],
@@ -1414,18 +1567,32 @@ function buildCallItem(c, closed) {
   };
   const [effLabel, effClass] = c.call_effect ? (effectMap[c.call_effect] || [c.call_effect, 'ci-effect']) : ['',''];
   const effectHtml = c.call_effect ? `<div class="${effClass}">${effLabel}</div>` : '';
+
   const time = new Date(c.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
   const dur = c.duration_seconds ? ` · ${Math.floor(c.duration_seconds/60)}:${String(c.duration_seconds%60).padStart(2,'0')}` : '';
 
-  // Przycisk PLAY — otwiera mini-player pod spodem
+  // pkt 10: czas odebrania
+  let pickupHtml = '';
+  if (c.answered_at && c.created_at) {
+    const secs = Math.round((new Date(c.answered_at) - new Date(c.created_at)) / 1000);
+    if (secs >= 0) {
+      const cls = secs <= 35 ? 'color:#27ae60' : secs <= 60 ? 'color:#ff9800' : 'color:#e74c3c';
+      pickupHtml = `<div class="ci-time-pickup" style="${cls}">⏱ Odebranie: ${secs}s</div>`;
+    }
+  }
+
+  // pkt 9: przycisk play do nagrania
   const playBtn = c.recording_url
     ? `<button class="act-btn act-play" onclick="togglePlayer(this,'${c.call_id}','${c.recording_url}')">▶ Odtwórz</button>`
     : '';
-  const playerSlot = c.recording_url ? `<div id="player-${c.call_id}" style="display:none;"><audio class="mini-player" controls preload="none" src="${c.recording_url}"></audio></div>` : '';
+  const playerSlot = c.recording_url
+    ? `<div id="player-${c.call_id}" style="display:none;"><audio class="mini-player" controls preload="none" src="${c.recording_url}"></audio></div>`
+    : '';
 
+  // pkt 5: w Zamkniętych — tylko podgląd (nie ma przycisku Raport, jest Podgląd)
   const actions = closed
-    ? `${playBtn}<button class="act-btn act-neutral" onclick="reopenTopic('${c.call_id}')">↩ Otwórz</button>`
-    : `${!c.call_effect ? `<button class="act-btn act-primary" onclick="openReportFor('${c.call_id}')">📋 Raport</button>` : ''}
+    ? `${playBtn}<button class="act-btn act-neutral" onclick="openReportFor('${c.call_id}')">👁 Podgląd</button><button class="act-btn act-neutral" onclick="reopenTopic('${c.call_id}')">↩ Otwórz</button>`
+    : `${!c.call_effect ? `<button class="act-btn act-report" onclick="openReportFor('${c.call_id}')">📋 Raport</button>` : `<button class="act-btn act-neutral" onclick="openReportFor('${c.call_id}')">👁 Podgląd</button>`}
        ${playBtn}
        <button class="act-btn act-danger" onclick="closeTopic('${c.call_id}')">✕ Zamknij</button>`;
 
@@ -1434,32 +1601,12 @@ function buildCallItem(c, closed) {
     <div class="ci-info">
       <div class="ci-name">${c.patient_name || c.caller_phone || 'Nieznany'}</div>
       <div class="ci-phone">${c.caller_phone || ''}${dur}</div>
+      ${pickupHtml}
       ${effectHtml}${playerSlot}
     </div>
     <div class="ci-time">${time}</div>
     <div class="ci-actions">${actions}</div>
   </div>`;
-}
-
-function openReportFor(callId) {
-  activeCallId = callId;
-  const call = openCalls.find(c => c.call_id === callId);
-  rpt = { type:'nowy', outcome:'', source:'', followup_when:'' };
-  const nameParts2 = call && call.patient_name ? call.patient_name.split(' ') : [];
-  document.getElementById('r-firstname').value = nameParts2[0] || '';
-  document.getElementById('r-lastname').value = nameParts2.slice(1).join(' ') || '';
-  document.getElementById('r-phone').value = call ? (call.caller_phone || '') : '';
-  document.getElementById('r-referred').value = '';
-  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('sel'));
-  document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('sel'));
-  ['rg-visit-date','rg-followup-when','rg-reason-neg','rg-referral'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
-  document.getElementById('rp-title').textContent = 'Raport rozmowy';
-  document.getElementById('btn-step1-next').disabled = true;
-  goStep(1);
-  document.getElementById('report-overlay').classList.add('open');
 }
 
 // ─── ZAMKNIĘTE ───────────────────────────────────────────────────────────────
@@ -1500,9 +1647,10 @@ function renderRecentCalls() {
     const init = name[0].toUpperCase();
     const color = typeColors[c.contact_type] || '#183C63';
     const isRinging = c.status === 'ringing';
+    const needsReport = !c.call_effect && !isRinging && c.status !== 'ringing';
     const [effLabel, effClass] = c.call_effect
       ? (effectBadge[c.call_effect] || [c.call_effect,'rb-nowe'])
-      : isRinging ? ['📞 Dzwoni','rb-ringing'] : ['Nowe','rb-nowe'];
+      : isRinging ? ['📞 Dzwoni','rb-ringing'] : needsReport ? ['📋 Raport','rb-report'] : ['Nowe','rb-nowe'];
     const time = new Date(c.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'});
 
     return `<div class="recent-item" onclick="openReportFor('${c.call_id}')">
@@ -1550,28 +1698,40 @@ async function loadDailyStats() {
     document.getElementById('cnt-wizyta').textContent = `${dayCounts.wizyta||0} dziś`;
     document.getElementById('cnt-nie').textContent = `${dayCounts.nie_pacjent||0} dziś`;
 
-    // ── KPI strip
     if (d.kpi) {
       document.getElementById('kpi-strip').style.display = 'grid';
       renderKPI('pickup',   d.kpi.pickupRate,     d.kpi.missedUnique,  d.kpi.calledBack);
       renderKPI('callback', d.kpi.callbackRate,   d.kpi.missedUnique,  d.kpi.calledBack);
       renderKPI('fast',     d.kpi.fastPickupRate, null, null);
     }
+
+    // pkt 11: panel coachingowy
+    if (d.coaching && d.coaching.length > 0) {
+      document.getElementById('coaching-panel').style.display = 'block';
+      document.getElementById('coaching-tips').innerHTML = d.coaching.map(tip =>
+        `<div class="coaching-tip ${tip.priority}">
+          <div class="ct-icon">${tip.icon}</div>
+          <div class="ct-body">
+            <div class="ct-title">${tip.title}</div>
+            <div class="ct-desc">${tip.desc}</div>
+          </div>
+        </div>`
+      ).join('');
+    }
   } catch(e) {}
 }
 
 function renderKPI(key, kpiData, missedData, calledData) {
   if (!kpiData) return;
-  const val   = kpiData.value;
-  const tgt   = kpiData.target;
-  const unit  = kpiData.unit || '';
+  const val = kpiData.value;
+  const tgt = kpiData.target;
+  const unit = kpiData.unit || '';
 
-  // Kolor na podstawie % celu
   let cls = '';
   if (val !== null && tgt !== null) {
-    if (val >= tgt)          cls = 'kpi-ok';
+    if (val >= tgt) cls = 'kpi-ok';
     else if (val >= tgt * 0.75) cls = 'kpi-warn';
-    else                     cls = 'kpi-bad';
+    else cls = 'kpi-bad';
   }
 
   const card  = document.getElementById(`kpi-${key}`);
@@ -1579,45 +1739,25 @@ function renderKPI(key, kpiData, missedData, calledData) {
   const fill  = document.getElementById(`kb-${key}`);
   const tgtEl = document.getElementById(`kt-${key}`);
   const meta  = document.getElementById(`km-${key}`);
-
   if (!card) return;
 
-  // Reset klas
   card.classList.remove('kpi-ok','kpi-warn','kpi-bad');
   vEl.classList.remove('kpi-ok','kpi-warn','kpi-bad');
   meta.classList.remove('kpi-ok','kpi-warn','kpi-bad');
   fill.classList.remove('kpi-ok','kpi-warn','kpi-bad');
 
-  if (val === null) {
-    vEl.textContent = '—';
-    fill.style.width = '0%';
-    meta.textContent = 'Brak danych';
-    return;
-  }
+  if (val === null) { vEl.textContent = '—'; fill.style.width = '0%'; meta.textContent = 'Brak danych'; return; }
 
   vEl.textContent = `${val}${unit}`;
   fill.style.width = `${Math.min(val, 100)}%`;
 
-  if (cls) {
-    card.classList.add(cls);
-    vEl.classList.add(cls);
-    fill.classList.add(cls);
-    meta.classList.add(cls);
-  }
+  if (cls) { card.classList.add(cls); vEl.classList.add(cls); fill.classList.add(cls); meta.classList.add(cls); }
+  if (tgt !== null && tgtEl) tgtEl.style.left = `${tgt}%`;
 
-  // Znacznik celu na pasku
-  if (tgt !== null && tgtEl) {
-    tgtEl.style.left = `${tgt}%`;
-  }
-
-  // Tekst meta
   if (key === 'pickup') {
-    const pct = val !== null ? `${val}%` : '—';
-    meta.textContent = cls === 'kpi-ok' ? `✅ Cel spełniony (${pct})` : cls === 'kpi-warn' ? `⚠️ Poniżej celu (${pct})` : `❌ Daleko od celu (${pct})`;
+    meta.textContent = cls === 'kpi-ok' ? `✅ Cel spełniony (${val}%)` : cls === 'kpi-warn' ? `⚠️ Poniżej celu (${val}%)` : `❌ Daleko od celu (${val}%)`;
   } else if (key === 'callback') {
-    const detail = (missedData && calledData)
-      ? `${calledData.value}/${missedData.value} unikalnych num.`
-      : '';
+    const detail = (missedData && calledData) ? `${calledData.value}/${missedData.value} unikalnych num.` : '';
     meta.textContent = (cls === 'kpi-ok' ? '✅ ' : cls === 'kpi-warn' ? '⚠️ ' : '❌ ') + detail;
   } else if (key === 'fast') {
     meta.textContent = cls === 'kpi-ok' ? `✅ Cel 85% spełniony` : cls === 'kpi-warn' ? `⚠️ Poniżej 85%` : `❌ Cel: 85% (w ciągu 35s)`;
@@ -1641,29 +1781,22 @@ async function loadStats() {
   } catch(e) {}
 }
 
-// ─── CONTACTS ────────────────────────────────────────────────────────────────────────────────
+// ─── CONTACTS ────────────────────────────────────────────────────────────────
 
-// Dodaj lub zaktualizuj kontakt w lokalnej liście
 function upsertLocalContact(c) {
   const idx = localContacts.findIndex(x => x.id === c.id || (c.phone && x.phone === c.phone));
-  if (idx >= 0) {
-    localContacts[idx] = { ...localContacts[idx], ...c };
-  } else {
-    localContacts.unshift(c);
-  }
-  // Jeśli jesteśmy na zakładce Kontakty — odśwież listę
+  if (idx >= 0) localContacts[idx] = { ...localContacts[idx], ...c };
+  else localContacts.unshift(c);
   const searchVal = document.getElementById('contact-search')?.value || '';
   if (searchVal.length >= 2) searchContacts();
   else renderAllContacts();
 }
 
-// Wczytaj wszystkie kontakty z serwera do lokalnego cache
 async function loadAllContacts() {
   try {
     const r = await fetch('/api/contacts?q=');
     const d = await r.json();
     if (d.contacts && d.contacts.length) {
-      // Scalań z lokalnym cache (zachowaj nowe z raportów)
       d.contacts.forEach(c => {
         if (!localContacts.find(x => x.id === c.id)) localContacts.push(c);
       });
@@ -1672,19 +1805,28 @@ async function loadAllContacts() {
   } catch(e) {}
 }
 
-// Renderuj wszystkie kontakty (bez filtrowania)
+// pkt 7: Renderuj kontakty z przyciskiem "Edytuj" (zgłoszenie zmiany)
 function renderAllContacts() {
   const el = document.getElementById('contacts-list');
   if (!el) return;
   if (!localContacts.length) { el.innerHTML = '<div class="empty-state">Brak kontaktów</div>'; return; }
-  el.innerHTML = localContacts.slice(0, 100).map(c => `<div class="contact-item">
-    <div class="c-avatar">${(c.name||c.firstName||'?')[0].toUpperCase()}</div>
+  el.innerHTML = localContacts.slice(0, 100).map(c => buildContactItem(c)).join('');
+}
+
+function buildContactItem(c) {
+  const name = c.name || [c.firstName,c.lastName].filter(Boolean).join(' ') || 'Brak imienia';
+  const phone = c.phone || '';
+  return `<div class="contact-item">
+    <div class="c-avatar">${(name||'?')[0].toUpperCase()}</div>
     <div class="c-info">
-      <div class="c-name">${c.name || [c.firstName,c.lastName].filter(Boolean).join(' ') || 'Brak imienia'}</div>
-      <div class="c-phone">${c.phone||'Brak numeru'}</div>
+      <div class="c-name">${name}</div>
+      <div class="c-phone">${phone || 'Brak numeru'}</div>
     </div>
-    <div class="ci-actions">${c.phone ? `<button class="act-btn act-primary" onclick="dialNumber('${c.phone}')">📞 Zadzwoń</button>` : ''}</div>
-  </div>`).join('');
+    <div class="ci-actions">
+      ${phone ? `<button class="act-btn act-primary" onclick="dialNumber('${phone}')" title="Zadzwoń">📞</button>` : ''}
+      <button class="act-btn act-neutral" onclick="openEditReqModal('${c.id}','${name.replace(/'/g,"\\'")}')">✏️ Edytuj</button>
+    </div>
+  </div>`;
 }
 
 let searchTimer;
@@ -1693,7 +1835,6 @@ function searchContacts() {
   const q = document.getElementById('contact-search').value.trim();
   if (q.length < 2) { renderAllContacts(); return; }
   searchTimer = setTimeout(async () => {
-    // Najpierw szukaj lokalnie
     const ql = q.toLowerCase();
     const local = localContacts.filter(c =>
       (c.name||'').toLowerCase().includes(ql) ||
@@ -1703,30 +1844,50 @@ function searchContacts() {
     );
     const el = document.getElementById('contacts-list');
     if (local.length) {
-      el.innerHTML = local.map(c => `<div class="contact-item">
-        <div class="c-avatar">${(c.name||c.firstName||'?')[0].toUpperCase()}</div>
-        <div class="c-info">
-          <div class="c-name">${c.name || [c.firstName,c.lastName].filter(Boolean).join(' ') || 'Brak imienia'}</div>
-          <div class="c-phone">${c.phone||'Brak numeru'}</div>
-        </div>
-        <div class="ci-actions">${c.phone ? `<button class="act-btn act-primary" onclick="dialNumber('${c.phone}')">📞 Zadzwoń</button>` : ''}</div>
-      </div>`).join('');
+      el.innerHTML = local.map(c => buildContactItem(c)).join('');
     } else {
-      // Fallback: szukaj na serwerze (GHL API)
       try {
         const r = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`);
         const d = await r.json();
         if (!d.contacts.length) { el.innerHTML = '<div class="empty-state">Brak wyników</div>'; return; }
-        // Dodaj do lokalnego cache
         d.contacts.forEach(c => upsertLocalContact(c));
-        el.innerHTML = d.contacts.map(c => `<div class="contact-item">
-          <div class="c-avatar">${(c.name||'?')[0].toUpperCase()}</div>
-          <div class="c-info"><div class="c-name">${c.name||'Brak imienia'}</div><div class="c-phone">${c.phone||'Brak numeru'}</div></div>
-          <div class="ci-actions">${c.phone ? `<button class="act-btn act-primary" onclick="dialNumber('${c.phone}')">📞 Zadzwoń</button>` : ''}</div>
-        </div>`).join('');
+        el.innerHTML = d.contacts.map(c => buildContactItem(c)).join('');
       } catch(e) { el.innerHTML = '<div class="empty-state">Błąd wyszukiwania</div>'; }
     }
   }, 300);
+}
+
+// pkt 7: Modal zgłoszenia zmiany kontaktu
+function openEditReqModal(contactId, contactName) {
+  document.getElementById('er-contact-id').value = contactId;
+  document.getElementById('er-contact-name').value = contactName;
+  document.getElementById('er-contact-display').textContent = contactName;
+  document.getElementById('er-change-request').value = '';
+  document.getElementById('edit-req-modal').classList.add('open');
+}
+
+function closeEditReqModal() {
+  document.getElementById('edit-req-modal').classList.remove('open');
+}
+
+async function submitEditRequest() {
+  const contactId = document.getElementById('er-contact-id').value;
+  const contactName = document.getElementById('er-contact-name').value;
+  const changeRequest = document.getElementById('er-change-request').value.trim();
+  if (!changeRequest) { alert('Opisz co chcesz zmienić'); return; }
+  try {
+    const r = await fetch('/api/contacts/edit-request', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contactId, contactName, changeRequest, requestedBy: currentUser?.name || 'Recepcja' }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      closeEditReqModal();
+      showToast('✅ Zgłoszenie wysłane do Soni — zadanie zostało utworzone w GHL');
+    } else {
+      showToast('❌ Błąd: ' + (d.error || 'Nieznany błąd'), 'error');
+    }
+  } catch(e) { showToast('❌ Błąd połączenia z serwerem', 'error'); }
 }
 
 // ─── DIALER ──────────────────────────────────────────────────────────────────
@@ -1745,60 +1906,50 @@ async function saveNewContact() {
   try {
     const r = await fetch('/api/contacts/add', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ firstName:fn, lastName:ln, phone, email:document.getElementById('ac-email').value.trim(), source:document.getElementById('ac-source').value, treatment:document.getElementById('ac-treatment').value, notes:document.getElementById('ac-notes').value.trim() }),
+      body: JSON.stringify({
+        firstName: fn, lastName: ln, phone,
+        email: document.getElementById('ac-email').value.trim(),
+        source: document.getElementById('ac-source').value,
+        treatment: document.getElementById('ac-treatment').value,
+        notes: document.getElementById('ac-notes').value.trim(),
+      }),
     });
     const d = await r.json();
-    if (d.success) { alert('Kontakt dodany do GHL!'); closeAddModal(); ['ac-fn','ac-ln','ac-phone','ac-email','ac-notes'].forEach(id => document.getElementById(id).value = ''); }
-    else alert('Błąd: ' + (d.error || 'Nieznany błąd'));
+    if (d.success) {
+      closeAddModal();
+      upsertLocalContact({ id: d.contactId, name: [fn,ln].filter(Boolean).join(' '), firstName: fn, lastName: ln, phone, email: document.getElementById('ac-email').value.trim() });
+      showToast('✅ Kontakt dodany do GHL');
+    } else {
+      alert('Błąd: ' + (d.error || 'Nieznany błąd'));
+    }
   } catch(e) { alert('Błąd połączenia'); }
 }
 
-// ─── CLICK-TO-CALL ────────────────────────────────────────────────────────
-async function dialNumber(phone) {
-  if (!phone) { alert('Brak numeru'); return; }
-  if (!confirm(`Zadzwonić do ${phone}?`)) return;
-  
-  // Próba przez WebRTC widget Zadarma (jeśli zaladowany)
-  if (window.zadarmaWidget && typeof window.zadarmaWidget.call === 'function') {
-    try {
-      window.zadarmaWidget.call(phone);
-      return;
-    } catch(e) {
-      console.warn('WebRTC call failed, falling back to callback API:', e);
-    }
-  }
-  
-  // Fallback: Zadarma Callback API (serwer dzwoni najpierw do agenta, potem do pacjenta)
-  try {
-    const fromExt = currentUser?.ext || '225340';
-    const r = await fetch('/api/call/dial', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ toNumber:phone, fromExt }),
-    });
-    const d = await r.json();
-    if (d.status === 'success') {
-      showToast('✅ Łączenie... Zadarma zadzwoni najpierw na Twój telefon, a potem połączy z pacjentem.');
-    } else {
-      showToast('❌ Błąd połączenia: ' + (d.message || 'Nieznany błąd'), 'error');
-    }
-  } catch(e) { showToast('❌ Błąd połączenia z serwerem', 'error'); }
+function dialNumber(phone) {
+  switchTab(document.querySelector('.tab:nth-child(7)'), 'dialer');
+  dialerNum = phone;
+  document.getElementById('dialer-display').textContent = phone;
 }
 
-function showToast(msg, type='success') {
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
   const t = document.createElement('div');
-  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:600;font-family:'Montserrat',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.25);max-width:380px;line-height:1.4;transition:opacity .4s;`;
-  t.style.background = type === 'error' ? '#e74c3c' : '#183C63';
-  t.style.color = '#fff';
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;padding:14px 22px;border-radius:12px;font-size:14px;font-weight:700;font-family:'Montserrat',sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.25);transition:opacity .3s;background:${type==='error'?'#e74c3c':'#27ae60'};color:#fff;`;
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 400); }, 4000);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 350); }, 3500);
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
-window.addEventListener('load', () => {
+(function init() {
   const saved = sessionStorage.getItem('ncUser');
-  if (saved) { currentUser = JSON.parse(saved); showDashboard(); }
-});
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      showDashboard();
+    } catch(e) {}
+  }
+})();
 </script>
 </body>
 </html>
