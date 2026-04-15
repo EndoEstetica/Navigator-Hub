@@ -34,7 +34,8 @@ const PIPELINE_ID = 'FVgB3ga52b0PUi6QjJ0x';
 
 // Stage IDs — EndoEstetica pipeline
 const STAGES = {
-  NOWE_ZGLOSZENIE:    '4d006021-f3b2-4efc-8efc-4f049522379c', // Stage 1
+  NOWE_ZGLOSZENIE:    '4d006021-f3b2-4efc-8efc-4f049522379c', // Stage 1 (EndoEstetica)
+  NOWE_ZGLOSZENIE_ALT: 'FVgB3ga52b0PUi6QjJ0x', // Alternatywny ID z debuga
   PO_PIERWSZEJ_PROBIE:'002dbc5a-c6a4-4931-a9a3-af4877b2c525', // Stage 2
   PO_DRUGIEJ_PROBIE:  'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8', // Stage 3
   DZIEN_2_EMAIL:      '6d0c5ca9-8b79-4bf3-a091-381e636cd21e', // Stage 4
@@ -372,6 +373,18 @@ async function getNewLeadsFromGHL() {
         limit: 100,
       });
       opportunities = data.opportunities || [];
+      
+      // Jeśli pusto, spróbuj z alternatywnym Stage ID
+      if (opportunities.length === 0) {
+        const dataAlt = await ghlRequest('get', '/opportunities/', {
+          locationId: GHL_LOCATION_ID,
+          pipelineId: PIPELINE_ID,
+          stageId: STAGES.NOWE_ZGLOSZENIE_ALT,
+          limit: 100,
+        });
+        opportunities = dataAlt.opportunities || [];
+      }
+      
       console.log(`[GHL] Próba 1 (list+stage): ${opportunities.length} szans`);
     } catch(e) {
       console.error('[GHL] Próba 1 błąd:', e.response?.data || e.message);
@@ -466,20 +479,29 @@ function verifyZadarmaSignature(params, signature) {
 }
 
 async function zadarmaClickToCall(fromExt, toNumber, retries = 3) {
-  // Zadarma wymaga numeru bez '+' na początku dla niektórych endpointów
-  const cleanToNumber = toNumber.replace(/[^0-9]/g, '');
+  // Zadarma callback API preferuje format z '+' dla numerów międzynarodowych
+  let formattedTo = toNumber.trim();
+  if (!formattedTo.startsWith('+')) {
+    // Jeśli numer ma 9 cyfr, dodaj +48
+    const digits = formattedTo.replace(/[^0-9]/g, '');
+    if (digits.length === 9) {
+      formattedTo = '+48' + digits;
+    } else if (digits.length > 9 && !formattedTo.startsWith('00')) {
+      formattedTo = '+' + digits;
+    }
+  }
   
   for (let i = 0; i < retries; i++) {
     try {
-      // Usunięcie parametru 'sip', aby uniknąć konfliktu z 'from' (extension)
-      const params = { from: fromExt, to: cleanToNumber };
+      // Parametr 'from' to numer wewnętrzny (extension), 'to' to numer docelowy
+      const params = { from: fromExt, to: formattedTo };
       const sign = zadarmaSign('/v1/request/callback/', params);
       const res = await axios.get('https://api.zadarma.com/v1/request/callback/', {
         params,
         headers: { 'Authorization': `${ZADARMA_KEY}:${sign}` },
         timeout: 10000,
       });
-      console.log(`[Zadarma] Click-to-Call success: ${fromExt} -> ${cleanToNumber}`);
+      console.log(`[Zadarma] Click-to-Call success: ${fromExt} -> ${formattedTo}`);
       return res.data;
     } catch (err) {
       const status = err.response?.status;
