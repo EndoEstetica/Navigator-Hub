@@ -445,6 +445,7 @@ async function getNewLeadsFromGHL() {
         createdAt: opp.createdAt || new Date().toISOString(),
         source:    opp.source || '',
         oppName:   opp.name   || '',
+        notes:     opp.notes  || '',
       });
     }
 
@@ -462,8 +463,8 @@ function zadarmaSign(method, params) {
   // 1. Sortowanie kluczy alfabetycznie
   const sortedKeys = Object.keys(params).sort();
   
-  // 2. Budowanie query string (bez encodeURIComponent!)
-  const paramString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
+  // 2. Budowanie query string
+  const paramString = sortedKeys.map(k => `${k}=${encodeURIComponent(String(params[k]))}`).join('&');
   
   // 3. MD5 z parametrów (HEX)
   const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
@@ -506,7 +507,7 @@ async function zadarmaClickToCall(fromExt, toNumber, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       // Parametr 'from' to numer wewnętrzny (extension), 'to' to numer docelowy
-      const params = { from: fromExt, to: formattedTo };
+      const params = { from: String(fromExt), to: String(formattedTo) };
       const sign = zadarmaSign('/v1/request/callback/', params);
       const res = await axios.get('https://api.zadarma.com/v1/request/callback/', {
         params,
