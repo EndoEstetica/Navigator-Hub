@@ -466,16 +466,20 @@ function verifyZadarmaSignature(params, signature) {
 }
 
 async function zadarmaClickToCall(fromExt, toNumber, retries = 3) {
+  // Zadarma wymaga numeru bez '+' na początku dla niektórych endpointów
+  const cleanToNumber = toNumber.replace(/[^0-9]/g, '');
+  
   for (let i = 0; i < retries; i++) {
     try {
-      const params = { from: fromExt, to: toNumber, sip: '225340' };
+      // Usunięcie parametru 'sip', aby uniknąć konfliktu z 'from' (extension)
+      const params = { from: fromExt, to: cleanToNumber };
       const sign = zadarmaSign('/v1/request/callback/', params);
       const res = await axios.get('https://api.zadarma.com/v1/request/callback/', {
         params,
         headers: { 'Authorization': `${ZADARMA_KEY}:${sign}` },
         timeout: 10000,
       });
-      console.log(`[Zadarma] Click-to-Call success: ${fromExt} -> ${toNumber}`);
+      console.log(`[Zadarma] Click-to-Call success: ${fromExt} -> ${cleanToNumber}`);
       return res.data;
     } catch (err) {
       const status = err.response?.status;
