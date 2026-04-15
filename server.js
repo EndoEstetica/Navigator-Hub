@@ -165,8 +165,8 @@ async function syncGHLContacts() {
       const data = await ghlRequest('get', '/contacts/', params);
       const contacts = data.contacts || [];
 
-      const withPhone = contacts.filter(c => c.phone && c.phone.trim() !== '');
-      allContacts = allContacts.concat(withPhone.map(c => ({
+      // Pobieraj wszystkie kontakty (nawet bez telefonu)
+      allContacts = allContacts.concat(contacts.map(c => ({
         id: c.id,
         name: (c.contactName || `${c.firstName || ''} ${c.lastName || ''}`).trim(),
         firstName: c.firstName || '',
@@ -363,16 +363,16 @@ async function getNewLeadsFromGHL() {
     console.log(`[GHL] Pobieranie leadów z Etapu 1 | pipeline=${PIPELINE_ID} | stage=${STAGES.NOWE_ZGLOSZENIE}`);
     let opportunities = [];
 
-    // Próba 1: /opportunities/search z pipeline_stage_id (GHL v2 poprawny parametr)
+    // Próba 1: /opportunities/ z pipelineId i stageId (GHL v2 poprawny parametr dla listy)
     try {
-      const data = await ghlRequest('get', '/opportunities/search', {
-        location_id: GHL_LOCATION_ID,
-        pipeline_id: PIPELINE_ID,
-        pipeline_stage_id: STAGES.NOWE_ZGLOSZENIE,
+      const data = await ghlRequest('get', '/opportunities/', {
+        locationId: GHL_LOCATION_ID,
+        pipelineId: PIPELINE_ID,
+        stageId: STAGES.NOWE_ZGLOSZENIE,
         limit: 100,
       });
       opportunities = data.opportunities || [];
-      console.log(`[GHL] Próba 1 (search+stage): ${opportunities.length} szans`);
+      console.log(`[GHL] Próba 1 (list+stage): ${opportunities.length} szans`);
     } catch(e) {
       console.error('[GHL] Próba 1 błąd:', e.response?.data || e.message);
     }

@@ -482,9 +482,8 @@ textarea.form-input{resize:vertical;}
     <div class="tab" onclick="switchTab(this,'dialer')">📱 Klawiatura</div>
   </div>
 
-  <!-- ══ KOKPIT ══ -->
-  <div class="tab-content active" id="tab-cockpit">
-
+  <!-- ══ KOKPIT (Ukryty, tylko dla statystyk) ══ -->
+  <div class="tab-content" id="tab-cockpit">
     <!-- Stats strip -->
     <div class="stats-strip">
       <div class="stat-card">
@@ -534,6 +533,14 @@ textarea.form-input{resize:vertical;}
       <div class="coaching-tips" id="coaching-tips"></div>
     </div>
 
+    <div class="recent-panel">
+      <div class="recent-heading">📋 Ostatnie rozmowy</div>
+      <div id="recent-list"><div class="empty-state">Brak rozmów</div></div>
+    </div>
+  </div>
+
+  <!-- Paski statusu (zawsze widoczne nad tabami jeśli aktywne) -->
+  <div id="status-bars" style="padding: 0 20px; margin-top: 10px;">
     <!-- Pasek po-rozmowie (pkt 1: "Uzupełnij raport") -->
     <div class="post-call-bar" id="post-call-bar">
       <div class="pcb-icon">📋</div>
@@ -552,48 +559,6 @@ textarea.form-input{resize:vertical;}
         <div class="acb-meta" id="acb-meta"></div>
       </div>
       <div class="acb-timer" id="acb-timer">00:00</div>
-    </div>
-
-    <div class="cockpit-grid">
-      <!-- Lewa: 4 przyciski -->
-      <div class="cockpit-panel">
-        <div class="cockpit-heading">Raport rozmowy telefonicznej</div>
-        <div class="cockpit-sub" id="cockpit-hint">
-          Przyciski aktywują się automatycznie gdy odbierasz połączenie
-        </div>
-        <div class="type-grid">
-          <div class="type-btn btn-nowy locked" id="btn-nowy" onclick="startReport('nowy')">
-            <span class="t-icon">➕</span>
-            <span class="t-name">Nowy Pacjent</span>
-            <span class="t-desc">Pierwszy kontakt</span>
-            <span class="t-count" id="cnt-nowy">0 dziś</span>
-          </div>
-          <div class="type-btn btn-staly locked" id="btn-staly" onclick="startReport('staly')">
-            <span class="t-icon">💎</span>
-            <span class="t-name">Stały Pacjent</span>
-            <span class="t-desc">Nowa rezerwacja</span>
-            <span class="t-count" id="cnt-staly">0 dziś</span>
-          </div>
-          <div class="type-btn btn-wizyta locked" id="btn-wizyta" onclick="startReport('wizyta')">
-            <span class="t-icon">📅</span>
-            <span class="t-name">Aktualna Wizyta</span>
-            <span class="t-desc">Sprawa bieżąca</span>
-            <span class="t-count" id="cnt-wizyta">0 dziś</span>
-          </div>
-          <div class="type-btn btn-nie locked" id="btn-nie" onclick="quickReport()">
-            <span class="t-icon">⚠️</span>
-            <span class="t-name">Nie Pacjent</span>
-            <span class="t-desc">Reklama / pomyłka</span>
-            <span class="t-count" id="cnt-nie">0 dziś</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Prawa: ostatnie rozmowy -->
-      <div class="recent-panel">
-        <div class="recent-heading">📋 Ostatnie rozmowy</div>
-        <div id="recent-list"><div class="empty-state">Brak rozmów</div></div>
-      </div>
     </div>
   </div>
 
@@ -943,6 +908,11 @@ function showDashboard() {
   document.getElementById('dashboard').style.display = 'block';
   document.getElementById('user-chip').textContent =
     `${currentUser.name} · ${currentUser.role === 'manager' ? 'Zarządzanie' : 'Recepcja'}`;
+  
+  // Domyślnie otwórz zakładkę "W obsłudze"
+  const openTab = document.querySelector('.tab:nth-child(3)');
+  if (openTab) switchTab(openTab, 'open');
+
   connectWS();
   loadDailyStats();
   loadNewLeads();
@@ -976,19 +946,24 @@ function handleWS(msg) {
       break;
 
     case 'CALL_RINGING':
-      activeCallId = msg.call.call_id;
       openCalls.unshift(msg.call);
       renderOpenCalls(); renderRecentCalls(); updateBadges();
-      unlockButtons();
-      showActiveBar(msg.call, 'ringing');
-      startCallTimer();
+      // Manager nie odbiera połączeń - nie pokazujemy mu paska aktywnego połączenia
+      if (currentUser?.role !== 'manager') {
+        activeCallId = msg.call.call_id;
+        unlockButtons();
+        showActiveBar(msg.call, 'ringing');
+        startCallTimer();
+      }
       break;
 
     case 'CALL_ANSWERED':
       updateCallField(msg.callId, 'status', 'answered');
       renderOpenCalls(); renderRecentCalls();
-      if (!activeCallId) activeCallId = msg.callId;
-      unlockButtons();
+      if (currentUser?.role !== 'manager') {
+        if (!activeCallId) activeCallId = msg.callId;
+        unlockButtons();
+      }
       break;
 
     case 'CALL_ENDED': {
@@ -998,7 +973,7 @@ function handleWS(msg) {
       clearCallTimer();
       // pkt 1: po zakończeniu — pokaż "Uzupełnij raport" zamiast migającego stanu
       const endedCall = openCalls.find(c => c.call_id === msg.callId);
-      if (activeCallId === msg.callId) {
+      if (currentUser?.role !== 'manager' && activeCallId === msg.callId) {
         document.getElementById('active-call-bar').classList.remove('visible');
         showPostCallBar(endedCall);
         unlockButtonsPostCall();
@@ -1598,12 +1573,15 @@ function buildCallItem(c, closed) {
   const dialBtn = c.caller_phone && c.caller_phone !== 'unknown'
     ? `<button class="act-btn act-primary" onclick="event.stopPropagation();dialNumber('${c.caller_phone}')" title="Zadzwoń">📞 Oddzwoń</button>`
     : '';
+  // pkt 5: w Zamkniętych — tylko podgląd (nie ma przycisku Raport, jest Podgląd)
+  const reopenBtn = (closed && currentUser?.role === 'manager') 
+    ? `<button class="act-btn act-neutral" onclick="reopenTopic('${c.call_id}')">↩ Otwórz</button>` 
+    : '';
   const actions = closed
-    ? `${dialBtn}${playBtn}<button class="act-btn act-neutral" onclick="openReportFor('${c.call_id}')">👁 Podgląd</button><button class="act-btn act-neutral" onclick="reopenTopic('${c.call_id}')">↩ Otwórz</button>`
+    ? `${dialBtn}${playBtn}<button class="act-btn act-neutral" onclick="openReportFor('${c.call_id}')">👁 Podgląd</button>${reopenBtn}`
     : `${dialBtn}${!c.call_effect ? `<button class="act-btn act-report" onclick="openReportFor('${c.call_id}')">📋 Raport</button>` : `<button class="act-btn act-neutral" onclick="openReportFor('${c.call_id}')">👁 Podgląd</button>`}
        ${playBtn}
        <button class="act-btn act-danger" onclick="closeTopic('${c.call_id}')">✕ Zamknij</button>`;
-
   return `<div class="call-item ${stateClass}">
     <div class="ci-badge ${badgeClass}">${badgeText}</div>
     <div class="ci-info">
