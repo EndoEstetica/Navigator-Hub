@@ -115,7 +115,35 @@ const supabase = {
   },
   
   async insertCall(callData) {
-    return this.query('calls', 'POST', callData);
+    // Zadarma może wysyłać ten sam pbx_call_id w kilku zdarzeniach.
+    // Jeśli call_id już istnieje — aktualizujemy rekord zamiast blokować INSERT.
+    // Supabase: Prefer: resolution=merge-duplicates + on_conflict=call_id
+    const url = new URL(`${SUPABASE_URL}/rest/v1/calls`);
+    url.searchParams.set('on_conflict', 'call_id');
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=representation',
+    };
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(callData),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('[Supabase] insertCall upsert error:', text);
+        // Fallback: jeśli upsert nie działa, użyj unikalnego call_id z timestamp
+        const fallbackData = { ...callData, call_id: callData.call_id + '_' + Date.now() };
+        return this.query('calls', 'POST', fallbackData);
+      }
+      return await res.json();
+    } catch (err) {
+      console.error('[Supabase] insertCall error:', err.message);
+      return null;
+    }
   },
   
   async updateCall(callId, updates) {
@@ -1567,7 +1595,20 @@ app.post('/webhook/zadarma', async (req, res) => {
   
   console.log('[Zadarma] Webhook received:', JSON.stringify(req.body));
   
-  const callId = pbx_call_id || call_id || `call_${Date.now()}`;
+  // Dla NOTIFY_START (inbound) generujemy unikalny callId oparty na timestamp
+  // aby uniknąć konfliktu UNIQUE na call_id w Supabase.
+  // pbx_call_id jest współdzielony między NOTIFY_START, NOTIFY_ANSWER, NOTIFY_END —
+  // dlatego używamy go do UPDATE (nie INSERT).
+  let callId;
+  if (event === 'NOTIFY_START' || event === 'NOTIFY_OUT_START') {
+    // Nowe połączenie — unikalny ID
+    callId = pbx_call_id
+      ? `${pbx_call_id}`  // Zadarma daje unikalny pbx_call_id per połączenie
+      : `call_${caller_id || 'unk'}_${Date.now()}`;
+  } else {
+    // NOTIFY_ANSWER, NOTIFY_END — szukamy po pbx_call_id lub call_id
+    callId = pbx_call_id || call_id || `call_${Date.now()}`;
+  }
   console.log(`[Zadarma] Event: ${event}, CallID: ${callId}, From: ${caller_id}, To: ${called_did}`);
   
   // NOTIFY_OUT_START — połączenie wychodzace zainicjowane przez PBX
@@ -1637,7 +1678,12 @@ app.post('/webhook/zadarma', async (req, res) => {
       contact_attempts: 0,
     };
     
-    await supabase.insertCall(callData);
+    const insertResult = await supabase.insertCall(callData);
+    if (!insertResult) {
+      console.error(`[Zadarma] NOTIFY_START: insertCall FAILED for callId=${callId}, caller=${caller_id}`);
+    } else {
+      console.log(`[Zadarma] NOTIFY_START: call saved, callId=${callId}, contact=${ghlContact?.name || 'unknown'}`);
+    }
     broadcast({ type: 'CALL_RINGING', call: callData });
 
   } else if (event === 'NOTIFY_ANSWER') {
