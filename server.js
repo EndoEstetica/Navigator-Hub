@@ -478,7 +478,7 @@ app.post('/api/call/initiate', async (req, res) => {
     }
 
     // Zadarma Click-to-Call API
-    const from = agentPhone || '';
+    const from = agentPhone || process.env.ZADARMA_DEFAULT_EXT || '103';
     const to = phoneNumber;
     const params = { from, to };
     const sign = await zadarmaSign(params);
