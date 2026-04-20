@@ -62,14 +62,14 @@ const users = {
   agnieszka:   { id: 'agnieszka',   name: 'Agnieszka',   role: 'reception', ext: '104', pin: '1104' },
   zastepstwo:  { id: 'zastepstwo',  name: 'Zastępstwo',  role: 'reception', ext: '105', pin: '1105' },
   // ── OPIEKUN PACJENTA ─────────────────────────────────────────────────────
-  aneta:       { id: 'aneta',       name: 'Aneta',       role: 'caretaker', ext: '201', pin: '2201' },
-  agata_o:     { id: 'agata_o',     name: 'Agata (OP)',  role: 'caretaker', ext: '202', pin: '2202' },
-  // ── ADMINISTRACJA ────────────────────────────────────────────────────────
-  bartosz:     { id: 'bartosz',     name: 'Bartosz',     role: 'admin',     ext: '301', pin: '3301' },
-  sandra:      { id: 'sandra',      name: 'Sandra',      role: 'admin',     ext: '302', pin: '3302' },
-  aneta_a:     { id: 'aneta_a',     name: 'Aneta (ADM)', role: 'admin',     ext: '303', pin: '3303' },
-  patrycja:    { id: 'patrycja',    name: 'Patrycja',    role: 'admin',     ext: '304', pin: '3304' },
-  sonia:       { id: 'sonia',       name: 'Sonia',       role: 'admin',     ext: '305', pin: '3305' },
+  aneta:       { id: 'aneta',       name: 'Aneta',       role: 'caretaker', ext: '101', pin: '2201' },
+  agata_o:     { id: 'agata_o',     name: 'Agata (OP)',  role: 'caretaker', ext: '102', pin: '2202' },
+  // ── ADMINISTRACJA (brak numeru wewnętrznego — nie obsługuje połączeń) ──────────────
+  bartosz:     { id: 'bartosz',     name: 'Bartosz',     role: 'admin',     ext: null,  pin: '3301' },
+  sandra:      { id: 'sandra',      name: 'Sandra',      role: 'admin',     ext: null,  pin: '3302' },
+  aneta_a:     { id: 'aneta_a',     name: 'Aneta (ADM)', role: 'admin',     ext: null,  pin: '3303' },
+  patrycja:    { id: 'patrycja',    name: 'Patrycja',    role: 'admin',     ext: null,  pin: '3304' },
+  sonia:       { id: 'sonia',       name: 'Sonia',       role: 'admin',     ext: null,  pin: '3305' },
 };
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────

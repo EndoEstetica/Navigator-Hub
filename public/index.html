@@ -298,6 +298,7 @@ body{font-family:'Montserrat',sans-serif;background:var(--beige);color:var(--tex
   cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .15s;white-space:nowrap;}
 .act-btn:hover{filter:brightness(.9);}
 .act-call{background:var(--navy);color:var(--gold);}
+.act-call-lg{padding:10px 18px;font-size:13px;background:var(--navy-d);box-shadow:0 2px 10px rgba(24,60,99,.3);}
 .act-report{background:var(--gold);color:var(--navy);}
 .act-view{background:var(--beige-d);color:var(--text);}
 .act-danger{background:#fce4ec;color:var(--red);}
@@ -640,7 +641,27 @@ textarea.form-input{resize:vertical;}
 
       <div class="sidebar-divider"></div>
 
-      <!-- Opiekunowie section -->
+      <!-- Opiekun Pacjenta section (caretaker) -->
+      <div id="nav-caretaker-section" style="display:none;">
+        <div class="sidebar-label">Opiekun Pacjenta</div>
+        <div class="nav-item" onclick="showView('open-calls')" id="nav-ct-open-calls">
+          <span class="nav-icon">📞</span>
+          <span class="nav-label">Bieżące połączenia</span>
+          <span class="nav-badge" id="badge-ct-open">0</span>
+        </div>
+        <div class="nav-item" onclick="showView('contacts')" id="nav-ct-contacts">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Kontakty</span>
+        </div>
+        <div class="nav-item" onclick="showView('dialer')" id="nav-ct-dialer">
+          <span class="nav-icon">📱</span>
+          <span class="nav-label">Klawiatura</span>
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- Opiekunowie section (admin only) -->
       <div id="nav-manager-section" style="display:none;">
         <div class="sidebar-label">Opiekunowie</div>
         <div class="nav-item" onclick="showView('my-stats')" id="nav-my-stats">
@@ -1275,14 +1296,14 @@ const USERS = {
   agnieszka:  { id:'agnieszka',  name:'Agnieszka',   role:'reception', ext:'104', pin:'1104' },
   zastepstwo: { id:'zastepstwo', name:'Zastępstwo',  role:'reception', ext:'105', pin:'1105' },
   // ── OPIEKUN PACJENTA
-  aneta:      { id:'aneta',      name:'Aneta',       role:'caretaker', ext:'201', pin:'2201' },
-  agata_o:    { id:'agata_o',    name:'Agata (OP)',  role:'caretaker', ext:'202', pin:'2202' },
-  // ── ADMINISTRACJA
-  bartosz:    { id:'bartosz',    name:'Bartosz',     role:'admin',     ext:'301', pin:'3301' },
-  sandra:     { id:'sandra',     name:'Sandra',      role:'admin',     ext:'302', pin:'3302' },
-  aneta_a:    { id:'aneta_a',    name:'Aneta (ADM)', role:'admin',     ext:'303', pin:'3303' },
-  patrycja:   { id:'patrycja',   name:'Patrycja',    role:'admin',     ext:'304', pin:'3304' },
-  sonia:      { id:'sonia',      name:'Sonia',       role:'admin',     ext:'305', pin:'3305' },
+  aneta:      { id:'aneta',      name:'Aneta',       role:'caretaker', ext:'101', pin:'2201' },
+  agata_o:    { id:'agata_o',    name:'Agata (OP)',  role:'caretaker', ext:'102', pin:'2202' },
+  // ── ADMINISTRACJA (brak numeru wewnętrznego)
+  bartosz:    { id:'bartosz',    name:'Bartosz',     role:'admin',     ext:null,  pin:'3301' },
+  sandra:     { id:'sandra',     name:'Sandra',      role:'admin',     ext:null,  pin:'3302' },
+  aneta_a:    { id:'aneta_a',    name:'Aneta (ADM)', role:'admin',     ext:null,  pin:'3303' },
+  patrycja:   { id:'patrycja',   name:'Patrycja',    role:'admin',     ext:null,  pin:'3304' },
+  sonia:      { id:'sonia',      name:'Sonia',       role:'admin',     ext:null,  pin:'3305' },
 };
 
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
@@ -1340,13 +1361,29 @@ function showApp() {
   const isCaretaker  = currentUser.role === 'caretaker';
   const isAdmin      = currentUser.role === 'admin';
 
-  document.getElementById('nav-reception-section').style.display = (isReception || isCaretaker || isAdmin) ? 'block' : 'none';
-  document.getElementById('nav-manager-section').style.display   = (isCaretaker || isAdmin) ? 'block' : 'none';
+  // Nav sekcje per rola:
+  // reception  — pełna recepcja
+  // caretaker  — tylko: bierzące połączenia + kontakty + klawiatura
+  // admin      — wszystko, ale bez obsługi połączeń
+
+  document.getElementById('nav-reception-section').style.display = (isReception || isAdmin) ? 'block' : 'none';
+  document.getElementById('nav-caretaker-section').style.display = isCaretaker ? 'block' : 'none';
+  document.getElementById('nav-manager-section').style.display   = (isAdmin) ? 'block' : 'none';
   document.getElementById('nav-admin-section').style.display     = isAdmin ? 'block' : 'none';
+
+  // Ukryj baner połączenia dla admina
+  if (isAdmin) {
+    const callBanner = document.getElementById('call-banner');
+    if (callBanner) callBanner.style.display = 'none';
+    const postBanner = document.getElementById('post-call-banner');
+    if (postBanner) postBanner.style.display = 'none';
+  }
 
   // Default view
   if (isAdmin) {
     showView('admin-stats');
+  } else if (isCaretaker) {
+    showView('open-calls');
   } else {
     showView('cockpit');
   }
@@ -1606,16 +1643,18 @@ function checkActiveCall() {
 
 // ─── BADGES ──────────────────────────────────────────────────────────────────
 function updateBadges() {
+  const count = openCalls.length;
+  // badge recepcja
   const ob = document.getElementById('badge-open');
-  if (ob) {
-    if (openCalls.length > 0) { ob.style.display = 'inline'; ob.textContent = openCalls.length; }
-    else ob.style.display = 'none';
-  }
+  if (ob) { ob.style.display = count > 0 ? 'inline' : 'none'; if (count > 0) ob.textContent = count; }
+  // badge opiekun pacjenta
+  const ctob = document.getElementById('badge-ct-open');
+  if (ctob) { ctob.style.display = count > 0 ? 'inline' : 'none'; if (count > 0) ctob.textContent = count; }
 }
 
 // ─── TASKS ───────────────────────────────────────────────────────────────────
 async function loadTodayTasks() {
-  if (currentUser?.role !== 'reception') return;
+  if (!currentUser || (currentUser.role !== 'reception' && currentUser.role !== 'caretaker')) return;
   try {
     const r = await fetch('/api/tasks/today');
     const d = await r.json();
@@ -1871,8 +1910,9 @@ function buildCallItem(c, closed) {
   const playerSlot = c.recording_url
     ? `<div id="player-${c.call_id}" style="display:none;"><audio class="mini-player" controls preload="none" src="${c.recording_url}"></audio></div>` : '';
 
+  const isCaretaker = currentUser?.role === 'caretaker';
   const dialBtn = c.caller_phone && c.caller_phone !== 'unknown'
-    ? `<button class="act-btn act-call" onclick="event.stopPropagation();dialNumber('${c.caller_phone}')">📞 Oddzwoń</button>` : '';
+    ? `<button class="act-btn act-call${isCaretaker ? ' act-call-lg' : ''}" onclick="event.stopPropagation();dialNumber('${c.caller_phone}')">${isCaretaker ? '📞 Oddzwoń szybko' : '📞 Oddzwoń'}</button>` : '';
 
   const reopenBtn = (closed && currentUser?.role === 'admin')
     ? `<button class="act-btn act-neutral" onclick="reopenTopic('${c.call_id}')">↩ Otwórz</button>` : '';
