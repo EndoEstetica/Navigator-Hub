@@ -50,15 +50,15 @@ const STAGES = {
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 const users = {
-  asia:     { id: 'asia',     name: 'Asia',       role: 'reception', ext: '103', pin: '1001' },
-  kasia:    { id: 'kasia',    name: 'Kasia',      role: 'reception', ext: '103', pin: '1002' },
-  agnieszka:{ id: 'agnieszka',name: 'Agnieszka',  role: 'reception', ext: '103', pin: '1003' },
-  aneta:    { id: 'aneta',    name: 'Aneta',      role: 'reception', ext: '103', pin: '1004' },
-  agata:    { id: 'agata',    name: 'Agata',      role: 'reception', ext: '103', pin: '1005' },
-  bartosz:  { id: 'bartosz',  name: 'Bartosz',    role: 'manager',   ext: '103', pin: '2001' },
-  sandra:   { id: 'sandra',   name: 'Sandra',     role: 'manager',   ext: '103', pin: '2002' },
-  aneta_m:  { id: 'aneta_m',  name: 'Aneta (M)',  role: 'manager',   ext: '103', pin: '2003' },
-  sonia:    { id: 'sonia',    name: 'Sonia',      role: 'manager',   ext: '103', pin: '2004' },
+  asia:      { id: 'asia',      name: 'Asia',       role: 'reception', ext: '101', pin: '1234' },
+  kasia:     { id: 'kasia',     name: 'Kasia',      role: 'reception', ext: '102', pin: '1234' },
+  agnieszka: { id: 'agnieszka', name: 'Agnieszka',  role: 'reception', ext: '103', pin: '1234' },
+  aneta:     { id: 'aneta',     name: 'Aneta',      role: 'reception', ext: '104', pin: '1234' },
+  agata:     { id: 'agata',     name: 'Agata',      role: 'reception', ext: '105', pin: '1234' },
+  bartosz:   { id: 'bartosz',   name: 'Bartosz',    role: 'manager',   ext: '100', pin: '5678' },
+  sandra:    { id: 'sandra',    name: 'Sandra',     role: 'manager',   ext: '100', pin: '5678' },
+  aneta_m:   { id: 'aneta_m',   name: 'Aneta M.',   role: 'manager',   ext: '100', pin: '5678' },
+  sonia:     { id: 'sonia',     name: 'Sonia',      role: 'admin',     ext: '100', pin: '9999' },
 };
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
@@ -1029,7 +1029,20 @@ app.get('/api/stats', async (req, res) => {
   // pkt 11: panel coachingowy — wskazówki dla recepcjonistki
   const coaching = buildCoachingTips({ totals, kpi, allCalls, answeredInbound, missedCalls, callsWithTiming, fastPickup });
 
-  res.json({ totals, perUser, typeCounts, kpi, coaching });
+  // effectCounts — globalne zliczenie efektów
+  const effectCounts = {};
+  allCalls.forEach(c => {
+    const eff = c.call_effect;
+    if (eff) effectCounts[eff] = (effectCounts[eff] || 0) + 1;
+  });
+
+  // followup per user
+  Object.keys(perUser).forEach(uid => {
+    perUser[uid].followup = (perUser[uid].effects['followup'] || 0) + (perUser[uid].effects['brak_decyzji'] || 0);
+    perUser[uid].role = users[uid]?.role || 'reception';
+  });
+
+  res.json({ totals, perUser, typeCounts, kpi, coaching, effectCounts });
 });
 
 // pkt 11: Generuj wskazówki coachingowe
@@ -1110,6 +1123,58 @@ function buildCoachingTips({ totals, kpi, allCalls, answeredInbound, missedCalls
 
   return tips;
 }
+
+// ─── API: Tasks today ───────────────────────────────────────────────────────
+app.get('/api/tasks/today', async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    // Pobierz zadania z GHL dla lokalizacji
+    const ghlRes = await ghlApi.get(`/locations/${GHL_LOCATION_ID}/tasks`, {
+      params: { limit: 50, startDate: today, endDate: tomorrow }
+    }).catch(() => null);
+    const tasks = ghlRes?.data?.tasks || [];
+    const mapped = tasks.map(t => ({
+      id: t.id,
+      title: t.title || t.body || 'Zadanie',
+      body: t.body || '',
+      dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL') : '',
+      contactName: t.contact?.name || '',
+      assignedTo: t.assignedTo || '',
+      overdue: t.dueDate && new Date(t.dueDate) < new Date(),
+    }));
+    res.json({ tasks: mapped });
+  } catch(e) {
+    console.error('[Tasks]', e.message);
+    res.json({ tasks: [] });
+  }
+});
+
+// ─── API: Update contact (admin) ─────────────────────────────────────────────
+app.post('/api/contacts/update', async (req, res) => {
+  const { contactId, firstName, lastName, phone, email, notes } = req.body;
+  if (!contactId) return res.status(400).json({ success: false, error: 'Brak contactId' });
+  try {
+    const body = {};
+    if (firstName !== undefined) body.firstName = firstName;
+    if (lastName  !== undefined) body.lastName  = lastName;
+    if (phone     !== undefined) body.phone      = phone;
+    if (email     !== undefined) body.email      = email;
+    if (notes     !== undefined) body.customFields = [{ key: 'notes', field_value: notes }];
+    await ghlApi.put(`/contacts/${contactId}`, body);
+    // Update local cache
+    const idx = ghlContactsCache.findIndex(x => x.id === contactId);
+    if (idx >= 0) {
+      const name = [firstName, lastName].filter(Boolean).join(' ') || ghlContactsCache[idx].name;
+      ghlContactsCache[idx] = { ...ghlContactsCache[idx], firstName, lastName, phone, email, name };
+    }
+    console.log(`[Admin] Contact updated: ${contactId}`);
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[Admin] Contact update error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
 
 // ─── API: Health check ──────────────────────────────────────────────────────
 
