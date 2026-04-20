@@ -61,6 +61,14 @@ body{font-family:'Montserrat',sans-serif;background:var(--beige);color:var(--tex
   text-transform:uppercase;letter-spacing:.8px;}
 .user-btn.selected .u-role{color:var(--navy);}
 .user-btn.manager-btn{border-style:dashed;}
+.user-btn.caretaker-btn{border-color:#2e7d32;color:#1b5e20;}
+.user-btn.caretaker-btn:hover{border-color:#2e7d32;background:#e8f5e9;}
+.user-btn.caretaker-btn.selected{background:#2e7d32;color:#fff;border-color:#2e7d32;}
+.user-btn.caretaker-btn.selected .u-role{color:#c8e6c9;}
+.user-btn.admin-btn{border-color:var(--navy);color:var(--navy);}
+.user-btn.admin-btn:hover{border-color:var(--navy-d);background:#e8edf4;}
+.user-btn.admin-btn.selected{background:var(--navy);color:var(--gold);border-color:var(--navy);}
+.user-btn.admin-btn.selected .u-role{color:rgba(255,191,0,.8);}
 .pin-row{display:flex;gap:8px;margin-bottom:16px;}
 .pin-input{flex:1;padding:14px;border:2px solid var(--border);border-radius:12px;font-size:24px;
   text-align:center;letter-spacing:12px;font-family:'Montserrat',sans-serif;background:var(--beige);}
@@ -86,6 +94,7 @@ body{font-family:'Montserrat',sans-serif;background:var(--beige);color:var(--tex
 .role-badge{font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;
   text-transform:uppercase;letter-spacing:1px;}
 .role-reception{background:rgba(255,191,0,.15);color:var(--gold);}
+.role-caretaker{background:rgba(100,200,120,.2);color:#a5d6a7;}
 .role-manager{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);}
 .role-admin{background:rgba(255,191,0,.25);color:var(--gold);}
 .top-center{display:flex;align-items:center;gap:8px;}
@@ -514,21 +523,28 @@ textarea.form-input{resize:vertical;}
     <div class="login-logo">Navigator <span>Hub</span></div>
     <div class="login-sub">EndoEstetica · System Recepcji</div>
 
-    <div class="login-section-label">Rejestracja</div>
+    <div class="login-section-label">Recepcja</div>
     <div class="user-grid" id="grid-reception">
-      <button class="user-btn" onclick="selectUser('asia')">Asia<span class="u-role">Rejestracja</span></button>
-      <button class="user-btn" onclick="selectUser('kasia')">Kasia<span class="u-role">Rejestracja</span></button>
-      <button class="user-btn" onclick="selectUser('agnieszka')">Agnieszka<span class="u-role">Rejestracja</span></button>
-      <button class="user-btn" onclick="selectUser('aneta')">Aneta<span class="u-role">Rejestracja</span></button>
-      <button class="user-btn" onclick="selectUser('agata')">Agata<span class="u-role">Rejestracja</span></button>
+      <button class="user-btn" onclick="selectUser('kasia')">Kasia<span class="u-role">Recepcja</span></button>
+      <button class="user-btn" onclick="selectUser('asia')">Asia<span class="u-role">Recepcja</span></button>
+      <button class="user-btn" onclick="selectUser('agata_r')">Agata<span class="u-role">Recepcja</span></button>
+      <button class="user-btn" onclick="selectUser('agnieszka')">Agnieszka<span class="u-role">Recepcja</span></button>
+      <button class="user-btn" onclick="selectUser('zastepstwo')">Zastępstwo<span class="u-role">Recepcja</span></button>
     </div>
 
-    <div class="login-section-label" style="margin-top:12px;">Opiekunowie &amp; Administracja</div>
-    <div class="user-grid" id="grid-managers">
-      <button class="user-btn manager-btn" onclick="selectUser('bartosz')">Bartosz<span class="u-role">Opiekun</span></button>
-      <button class="user-btn manager-btn" onclick="selectUser('sandra')">Sandra<span class="u-role">Opiekun</span></button>
-      <button class="user-btn manager-btn" onclick="selectUser('aneta_m')">Aneta M.<span class="u-role">Opiekun</span></button>
-      <button class="user-btn manager-btn" onclick="selectUser('sonia')">Sonia<span class="u-role">Administracja</span></button>
+    <div class="login-section-label" style="margin-top:12px;">Opiekun Pacjenta</div>
+    <div class="user-grid" id="grid-caretakers">
+      <button class="user-btn caretaker-btn" onclick="selectUser('aneta')">Aneta<span class="u-role">Opiekun Pacjenta</span></button>
+      <button class="user-btn caretaker-btn" onclick="selectUser('agata_o')">Agata<span class="u-role">Opiekun Pacjenta</span></button>
+    </div>
+
+    <div class="login-section-label" style="margin-top:12px;">Administracja</div>
+    <div class="user-grid" id="grid-admins">
+      <button class="user-btn admin-btn" onclick="selectUser('bartosz')">Bartosz<span class="u-role">Administracja</span></button>
+      <button class="user-btn admin-btn" onclick="selectUser('sandra')">Sandra<span class="u-role">Administracja</span></button>
+      <button class="user-btn admin-btn" onclick="selectUser('aneta_a')">Aneta<span class="u-role">Administracja</span></button>
+      <button class="user-btn admin-btn" onclick="selectUser('patrycja')">Patrycja<span class="u-role">Administracja</span></button>
+      <button class="user-btn admin-btn" onclick="selectUser('sonia')">Sonia<span class="u-role">Administracja</span></button>
     </div>
 
     <div class="pin-row" style="margin-top:16px;">
@@ -1252,15 +1268,21 @@ let dayCounts = {};
 
 // ─── USERS ───────────────────────────────────────────────────────────────────
 const USERS = {
-  asia:      { id:'asia',      name:'Asia',       role:'reception', ext:'101', pin:'1234' },
-  kasia:     { id:'kasia',     name:'Kasia',      role:'reception', ext:'102', pin:'1234' },
-  agnieszka: { id:'agnieszka', name:'Agnieszka',  role:'reception', ext:'103', pin:'1234' },
-  aneta:     { id:'aneta',     name:'Aneta',      role:'reception', ext:'104', pin:'1234' },
-  agata:     { id:'agata',     name:'Agata',      role:'reception', ext:'105', pin:'1234' },
-  bartosz:   { id:'bartosz',   name:'Bartosz',    role:'manager',   ext:'100', pin:'5678' },
-  sandra:    { id:'sandra',    name:'Sandra',     role:'manager',   ext:'100', pin:'5678' },
-  aneta_m:   { id:'aneta_m',   name:'Aneta M.',   role:'manager',   ext:'100', pin:'5678' },
-  sonia:     { id:'sonia',     name:'Sonia',      role:'admin',     ext:'100', pin:'9999' },
+  // ── RECEPCJA
+  kasia:      { id:'kasia',      name:'Kasia',       role:'reception', ext:'101', pin:'1101' },
+  asia:       { id:'asia',       name:'Asia',        role:'reception', ext:'102', pin:'1102' },
+  agata_r:    { id:'agata_r',    name:'Agata',       role:'reception', ext:'103', pin:'1103' },
+  agnieszka:  { id:'agnieszka',  name:'Agnieszka',   role:'reception', ext:'104', pin:'1104' },
+  zastepstwo: { id:'zastepstwo', name:'Zastępstwo',  role:'reception', ext:'105', pin:'1105' },
+  // ── OPIEKUN PACJENTA
+  aneta:      { id:'aneta',      name:'Aneta',       role:'caretaker', ext:'201', pin:'2201' },
+  agata_o:    { id:'agata_o',    name:'Agata (OP)',  role:'caretaker', ext:'202', pin:'2202' },
+  // ── ADMINISTRACJA
+  bartosz:    { id:'bartosz',    name:'Bartosz',     role:'admin',     ext:'301', pin:'3301' },
+  sandra:     { id:'sandra',     name:'Sandra',      role:'admin',     ext:'302', pin:'3302' },
+  aneta_a:    { id:'aneta_a',    name:'Aneta (ADM)', role:'admin',     ext:'303', pin:'3303' },
+  patrycja:   { id:'patrycja',   name:'Patrycja',    role:'admin',     ext:'304', pin:'3304' },
+  sonia:      { id:'sonia',      name:'Sonia',       role:'admin',     ext:'305', pin:'3305' },
 };
 
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
@@ -1309,30 +1331,24 @@ function showApp() {
   // Set user info
   document.getElementById('user-chip').textContent = currentUser.name;
   const roleBadge = document.getElementById('role-badge');
-  const roleLabels = { reception:'Rejestracja', manager:'Opiekun', admin:'Administracja' };
+  const roleLabels = { reception:'Recepcja', caretaker:'Opiekun Pacjenta', admin:'Administracja' };
   roleBadge.textContent = roleLabels[currentUser.role] || currentUser.role;
   roleBadge.className = 'role-badge role-' + currentUser.role;
 
   // Show/hide sidebar sections based on role
-  document.getElementById('nav-reception-section').style.display = 
-    (currentUser.role === 'reception') ? 'block' : 'none';
-  document.getElementById('nav-manager-section').style.display = 
-    (currentUser.role === 'manager') ? 'block' : 'none';
-  document.getElementById('nav-admin-section').style.display = 
-    (currentUser.role === 'admin') ? 'block' : 'none';
+  const isReception  = currentUser.role === 'reception';
+  const isCaretaker  = currentUser.role === 'caretaker';
+  const isAdmin      = currentUser.role === 'admin';
+
+  document.getElementById('nav-reception-section').style.display = (isReception || isCaretaker || isAdmin) ? 'block' : 'none';
+  document.getElementById('nav-manager-section').style.display   = (isCaretaker || isAdmin) ? 'block' : 'none';
+  document.getElementById('nav-admin-section').style.display     = isAdmin ? 'block' : 'none';
 
   // Default view
-  if (currentUser.role === 'reception') {
-    showView('cockpit');
-  } else if (currentUser.role === 'manager') {
-    showView('cockpit');
-    // Also show reception nav for managers
-    document.getElementById('nav-reception-section').style.display = 'block';
-  } else if (currentUser.role === 'admin') {
+  if (isAdmin) {
     showView('admin-stats');
-    // Admin sees all
-    document.getElementById('nav-reception-section').style.display = 'block';
-    document.getElementById('nav-manager-section').style.display = 'block';
+  } else {
+    showView('cockpit');
   }
 
   document.getElementById('cockpit-title').textContent = `Dzień dobry, ${currentUser.name}!`;

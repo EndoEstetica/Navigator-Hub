@@ -49,16 +49,27 @@ const STAGES = {
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+// Role: reception | caretaker | admin
+// reception    = Recepcja
+// caretaker     = Opiekun Pacjenta
+// admin         = Administracja
+
 const users = {
-  asia:      { id: 'asia',      name: 'Asia',       role: 'reception', ext: '101', pin: '1234' },
-  kasia:     { id: 'kasia',     name: 'Kasia',      role: 'reception', ext: '102', pin: '1234' },
-  agnieszka: { id: 'agnieszka', name: 'Agnieszka',  role: 'reception', ext: '103', pin: '1234' },
-  aneta:     { id: 'aneta',     name: 'Aneta',      role: 'reception', ext: '104', pin: '1234' },
-  agata:     { id: 'agata',     name: 'Agata',      role: 'reception', ext: '105', pin: '1234' },
-  bartosz:   { id: 'bartosz',   name: 'Bartosz',    role: 'manager',   ext: '100', pin: '5678' },
-  sandra:    { id: 'sandra',    name: 'Sandra',     role: 'manager',   ext: '100', pin: '5678' },
-  aneta_m:   { id: 'aneta_m',   name: 'Aneta M.',   role: 'manager',   ext: '100', pin: '5678' },
-  sonia:     { id: 'sonia',     name: 'Sonia',      role: 'admin',     ext: '100', pin: '9999' },
+  // ── RECEPCJA ─────────────────────────────────────────────────────────────
+  kasia:       { id: 'kasia',       name: 'Kasia',       role: 'reception', ext: '101', pin: '1101' },
+  asia:        { id: 'asia',        name: 'Asia',        role: 'reception', ext: '102', pin: '1102' },
+  agata_r:     { id: 'agata_r',     name: 'Agata',       role: 'reception', ext: '103', pin: '1103' },
+  agnieszka:   { id: 'agnieszka',   name: 'Agnieszka',   role: 'reception', ext: '104', pin: '1104' },
+  zastepstwo:  { id: 'zastepstwo',  name: 'Zastępstwo',  role: 'reception', ext: '105', pin: '1105' },
+  // ── OPIEKUN PACJENTA ─────────────────────────────────────────────────────
+  aneta:       { id: 'aneta',       name: 'Aneta',       role: 'caretaker', ext: '201', pin: '2201' },
+  agata_o:     { id: 'agata_o',     name: 'Agata (OP)',  role: 'caretaker', ext: '202', pin: '2202' },
+  // ── ADMINISTRACJA ────────────────────────────────────────────────────────
+  bartosz:     { id: 'bartosz',     name: 'Bartosz',     role: 'admin',     ext: '301', pin: '3301' },
+  sandra:      { id: 'sandra',      name: 'Sandra',      role: 'admin',     ext: '302', pin: '3302' },
+  aneta_a:     { id: 'aneta_a',     name: 'Aneta (ADM)', role: 'admin',     ext: '303', pin: '3303' },
+  patrycja:    { id: 'patrycja',    name: 'Patrycja',    role: 'admin',     ext: '304', pin: '3304' },
+  sonia:       { id: 'sonia',       name: 'Sonia',       role: 'admin',     ext: '305', pin: '3305' },
 };
 
 // ─── In-memory cache ─────────────────────────────────────────────────────────
