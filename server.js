@@ -317,16 +317,8 @@ async function addNoteToContact(contactId, note) {
 // pkt 7: Utwórz zadanie w GHL dla Soni (edycja kontaktu)
 async function createTaskForSonia(contactId, contactName, changeRequest, requestedBy) {
   try {
-    // Szukaj użytkownika Sonia w GHL po emailu
-    let soniaUserId = null;
-    try {
-      const usersRes = await ghlApi.get('/users/', { params: { locationId: GHL_LOCATION_ID } });
-      const ghlUsers = usersRes.data.users || [];
-      const sonia = ghlUsers.find(u => u.email === SONIA_GHL_EMAIL);
-      if (sonia) soniaUserId = sonia.id;
-    } catch (e) {
-      console.warn('[GHL] Could not fetch users for task assignment:', e.message);
-    }
+    // GHL User ID Soni — hardcoded (MPfq6I0r42R3P50ZqJ3V)
+    const soniaUserId = 'MPfq6I0r42R3P50ZqJ3V';
 
     const dueDate = new Date();
     dueDate.setHours(dueDate.getHours() + 24);
