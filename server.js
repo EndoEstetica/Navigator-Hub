@@ -1135,7 +1135,66 @@ function buildCoachingTips({ totals, kpi, allCalls, answeredInbound, missedCalls
   return tips;
 }
 
-// ─── API: Tasks today ───────────────────────────────────────────────────────
+// ─── API: Tasks (full — lista + pula) ─────────────────────────────────────
+// GHL user ID dla Soni — zadania z jej konta
+const SONIA_GHL_USER_ID = 'MPfq6I0r42R3P50ZqJ3V';
+
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const assignedTo = req.query.assignedTo || '';
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setHours(0,0,0,0);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 30); // następne 30 dni
+
+    // Pobierz zadania z GHL dla lokalizacji
+    const ghlRes = await ghlApi.get(`/locations/${GHL_LOCATION_ID}/tasks`, {
+      params: {
+        limit: 100,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      }
+    }).catch(() => null);
+
+    const rawTasks = ghlRes?.data?.tasks || [];
+
+    const mapTask = (t) => ({
+      id: t.id,
+      title: t.title || t.body || 'Zadanie',
+      body: t.body || '',
+      dueDate: t.dueDate || null,
+      contactId: t.contactId || '',
+      contactName: t.contact?.name || t.contactName || '',
+      contactPhone: t.contact?.phone || '',
+      assignedToId: t.assignedTo || '',
+      assignedToName: t.assignedToName || '',
+      completed: t.completed || false,
+      overdue: t.dueDate && new Date(t.dueDate) < new Date(),
+    });
+
+    // Pula recepcji — zadania bez assignee lub przypisane do wirtualnego konta recepcji
+    const pool = rawTasks
+      .filter(t => !t.assignedTo || t.assignedTo === 'pool')
+      .map(mapTask);
+
+    // Zadania przypisane
+    let tasks = rawTasks
+      .filter(t => t.assignedTo && t.assignedTo !== 'pool')
+      .map(mapTask);
+
+    if (assignedTo) {
+      tasks = tasks.filter(t => t.assignedToName === assignedTo || t.assignedToId === assignedTo);
+    }
+
+    res.json({ tasks, pool });
+  } catch(e) {
+    console.error('[Tasks]', e.message);
+    res.json({ tasks: [], pool: [] });
+  }
+});
+
+// ─── API: Tasks today (legacy alias) ────────────────────────────────────────
 app.get('/api/tasks/today', async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -1184,6 +1243,187 @@ app.post('/api/contacts/update', async (req, res) => {
   } catch(e) {
     console.error('[Admin] Contact update error:', e.response?.data || e.message);
     res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Tasks — create ────────────────────────────────────────────────────
+
+app.post('/api/tasks/create', async (req, res) => {
+  const { contactId, title, dueDate, taskType, assignedTo, createdBy } = req.body;
+  if (!title) return res.status(400).json({ success: false, error: 'Brak tytułu zadania' });
+  try {
+    const taskBody = {
+      title,
+      body: title,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+      completed: false,
+    };
+    // Przypisz do użytkownika jeśli podano
+    if (assignedTo && assignedTo !== '') {
+      // Mapowanie ID użytkownika GHL
+      const userMap = {
+        aneta: '',
+        agata_o: '',
+        sonia: 'MPfq6I0r42R3P50ZqJ3V',
+      };
+      const ghlUserId = userMap[assignedTo];
+      if (ghlUserId) taskBody.assignedTo = ghlUserId;
+    }
+    let result;
+    if (contactId) {
+      result = await ghlApi.post(`/contacts/${contactId}/tasks`, taskBody);
+    } else {
+      // Zadanie bez kontaktu — przypisz do lokalizacji
+      result = await ghlApi.post(`/locations/${GHL_LOCATION_ID}/tasks`, taskBody);
+    }
+    console.log(`[Tasks] Created task: ${title} by ${createdBy}`);
+    res.json({ success: true, task: result.data });
+  } catch(e) {
+    console.error('[Tasks] Create error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Tasks — complete ───────────────────────────────────────────────────
+
+app.post('/api/tasks/complete', async (req, res) => {
+  const { taskId, contactId, completed, completedBy } = req.body;
+  if (!taskId || !contactId) return res.status(400).json({ success: false, error: 'Brak taskId lub contactId' });
+  try {
+    await ghlApi.put(`/contacts/${contactId}/tasks/${taskId}/completed`, { completed: !!completed });
+    // Dodaj notatkę w GHL
+    if (completed) {
+      const note = `Wykonane przez: ${completedBy || 'Nieznany'} — ${new Date().toLocaleString('pl-PL')}`;
+      await ghlApi.post(`/contacts/${contactId}/notes`, { body: note }).catch(() => {});
+    }
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[Tasks] Complete error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Tasks — claim (przejęcie z puli recepcji) ──────────────────────────
+
+app.post('/api/tasks/claim', async (req, res) => {
+  const { taskId, contactId, userId, userName } = req.body;
+  if (!taskId || !contactId) return res.status(400).json({ success: false, error: 'Brak taskId lub contactId' });
+  try {
+    await ghlApi.put(`/contacts/${contactId}/tasks/${taskId}`, { assignedTo: userId });
+    // Dodaj notatkę
+    const note = `Zadanie przejęte przez: ${userName || 'Nieznany'} — ${new Date().toLocaleString('pl-PL')}`;
+    await ghlApi.post(`/contacts/${contactId}/notes`, { body: note }).catch(() => {});
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[Tasks] Claim error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Tasks — update (zmiana terminu/tytułu) ─────────────────────────────
+
+app.post('/api/tasks/update', async (req, res) => {
+  const { taskId, contactId, title, dueDate, updatedBy } = req.body;
+  if (!taskId || !contactId) return res.status(400).json({ success: false, error: 'Brak taskId lub contactId' });
+  try {
+    const body = {};
+    if (title) body.title = title;
+    if (dueDate) body.dueDate = new Date(dueDate).toISOString();
+    await ghlApi.put(`/contacts/${contactId}/tasks/${taskId}`, body);
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[Tasks] Update error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Report — save ──────────────────────────────────────────────────────
+
+app.post('/api/report/save', async (req, res) => {
+  const {
+    callId, contactId, phone,
+    status, effect, visitAction, referral, referralPerson,
+    program, channel, w0Date, followupDate, followupNote,
+    rezygnacjaReason, niekwalReason,
+    visitChangeReason, visitNewDate, visitCancelReason,
+    notes, savedBy
+  } = req.body;
+
+  try {
+    // 1. Zaktualizuj call w Supabase
+    const callUpdates = {
+      contact_type: status,
+      call_effect: effect || visitAction || status,
+      notes: notes || '',
+      topic_closed: true,
+      closed_at: new Date().toISOString(),
+      user_id: savedBy,
+    };
+    if (w0Date) callUpdates.booked_visit = true;
+    await supabase.updateCall(callId, callUpdates);
+
+    // 2. Zaktualizuj kontakt w GHL
+    if (contactId) {
+      const customFields = [];
+      if (channel) customFields.push({ key: 'preferowany_kana_informacyjne', field_value: channel });
+      if (referral) customFields.push({ key: 'typ_polecenia', field_value: referral });
+      if (referralPerson) customFields.push({ key: 'dane_osoby_polecajcej', field_value: referralPerson });
+      if (program) customFields.push({ key: 'dedykowany_program_leczenia', field_value: program });
+      if (niekwalReason) customFields.push({ key: 'powd_rezygnacji__niekwalifikacji', field_value: niekwalReason });
+      if (rezygnacjaReason) customFields.push({ key: 'powd_rezygnacji__niekwalifikacji', field_value: rezygnacjaReason });
+      if (visitChangeReason) customFields.push({ key: 'powd_zmiany__odwoania', field_value: visitChangeReason });
+      if (visitNewDate) customFields.push({ key: 'nowy_termin_wizyty', field_value: visitNewDate });
+      if (w0Date) customFields.push({ key: 'data_w0', field_value: w0Date });
+
+      if (customFields.length > 0) {
+        await ghlApi.put(`/contacts/${contactId}`, { customFields }).catch(e =>
+          console.warn('[Report] GHL custom fields update failed:', e.message)
+        );
+      }
+
+      // 3. Utwórz zadanie follow-up jeśli potrzeba
+      if (effect === 'followup' && followupDate) {
+        const taskTitle = followupNote || `Follow-up: ${phone}`;
+        await ghlApi.post(`/contacts/${contactId}/tasks`, {
+          title: taskTitle,
+          body: taskTitle,
+          dueDate: new Date(followupDate).toISOString(),
+          completed: false,
+        }).catch(e => console.warn('[Report] Follow-up task creation failed:', e.message));
+      }
+
+      // 4. Dodaj notatkę w GHL
+      const noteLines = [`Raport rozmowy — ${savedBy} — ${new Date().toLocaleString('pl-PL')}`,
+        `Status: ${status}`, effect ? `Efekt: ${effect}` : '', notes ? `Notatka: ${notes}` : ''
+      ].filter(Boolean);
+      await ghlApi.post(`/contacts/${contactId}/notes`, { body: noteLines.join('\n') }).catch(() => {});
+    }
+
+    broadcast({ type: 'CALL_ENDED', callId, status: 'closed', duration: 0 });
+    res.json({ success: true });
+  } catch(e) {
+    console.error('[Report] Save error:', e.response?.data || e.message);
+    res.status(500).json({ success: false, error: e.response?.data?.message || e.message });
+  }
+});
+
+// ─── API: Call — initiate (outbound) ─────────────────────────────────────────
+
+app.post('/api/call/initiate', async (req, res) => {
+  const { phone, ext, userId } = req.body;
+  if (!phone || !ext) return res.status(400).json({ success: false, error: 'Brak numeru lub ext' });
+  try {
+    const params = {
+      from: ext,
+      to: phone,
+      predicted: 1,
+    };
+    const zadarmaRes = await zadarmaRequest('/v1/request/callback/', params);
+    console.log(`[Zadarma] Outbound call initiated: ext ${ext} -> ${phone}`);
+    res.json({ success: true, data: zadarmaRes });
+  } catch(e) {
+    console.error('[Zadarma] Call initiate error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
