@@ -80,7 +80,7 @@ const GHL_SYNC_INTERVAL = 10 * 60 * 1000; // 10 minut
 
 let ghlLeadsCache = null;
 let ghlLeadsLastSync = 0;
-const GHL_LEADS_CACHE_TTL = 30 * 1000; // 30 sekund cache dla nowych zgłoszeń
+const GHL_LEADS_CACHE_TTL = 10 * 1000; // 10 sekund cache dla nowych zgłoszeń (szybsza synchronizacja)
 
 // ─── Supabase Helper ─────────────────────────────────────────────────────────
 
@@ -425,15 +425,26 @@ async function getNewLeadsFromGHL() {
       let contactPhone = relation.phone || contact.phone || '';
       let contactEmail = relation.email || contact.email || '';
 
-      if (contactId && !contactPhone) {
+      let zCzymSieZglasza = '';
+      let contactTags = [];
+      if (contactId) {
         try {
           const contactRes = await ghlApi.get(`/contacts/${contactId}`);
           const c = contactRes.data.contact || contactRes.data;
           const fn = c.firstName || '';
           const ln = c.lastName  || '';
           if (!contactName) contactName = (c.contactName || `${fn} ${ln}`).trim();
-          contactPhone = c.phone || '';
-          contactEmail = c.email || contactEmail;
+          if (!contactPhone) contactPhone = c.phone || '';
+          if (!contactEmail) contactEmail = c.email || '';
+          contactTags = c.tags || [];
+          // Pole z_czym_sie_zglasza
+          const customFields = c.customFields || c.customField || [];
+          const zField = customFields.find(f =>
+            f.key === 'z_czym_si_zgasza' || f.fieldKey === 'z_czym_si_zgasza' ||
+            (f.name || '').toLowerCase().includes('z czym') ||
+            (f.name || '').toLowerCase().includes('zgłasza')
+          );
+          if (zField) zCzymSieZglasza = zField.value || zField.fieldValue || '';
         } catch (e) {
           console.error(`[GHL] Błąd pobierania kontaktu ${contactId}:`, e.message);
         }
@@ -446,9 +457,11 @@ async function getNewLeadsFromGHL() {
         phone:     contactPhone || '',
         email:     contactEmail || '',
         createdAt: opp.createdAt || new Date().toISOString(),
-        source:    opp.source || '',
+        source:    opp.source || opp.leadSource || '',
         oppName:   opp.name   || '',
         notes:     opp.notes  || '',
+        z_czym_sie_zglasza: zCzymSieZglasza,
+        tags:      contactTags,
       });
     }
 
@@ -762,13 +775,44 @@ app.get('/api/leads/new', async (req, res) => {
   }
   
   try {
-    const leads = await getNewLeadsFromGHL();
+    let leads = await getNewLeadsFromGHL();
+    // Demo: jeśli GHL zwraca 0 rekordów, pokaż przykładowe zgłoszenia
+    if (leads.length === 0 && process.env.DEMO_LEADS !== 'false') {
+      const demoNow = new Date();
+      leads = [
+        { id: 'demo-1', contactId: '', name: 'Anna Kowalska', phone: '+48 600 123 456', email: 'anna@example.com',
+          createdAt: new Date(demoNow - 8 * 60000).toISOString(), source: 'Smart Day',
+          z_czym_sie_zglasza: 'Problemy z kręgosłupem, szukam rehabilitacji', tags: [] },
+        { id: 'demo-2', contactId: '', name: 'Marek Nowak', phone: '+48 501 987 654', email: 'marek@example.com',
+          createdAt: new Date(demoNow - 75 * 60000).toISOString(), source: 'Audyt 360',
+          z_czym_sie_zglasza: 'Bóle stawów, zainteresowany programem leczenia', tags: [] },
+        { id: 'demo-3', contactId: '', name: 'Katarzyna Wiśniewska', phone: '+48 722 345 678', email: 'kasia@example.com',
+          createdAt: new Date(demoNow - 145 * 60000).toISOString(), source: 'Smart Day',
+          z_czym_sie_zglasza: 'Chce się dowiedzieć więcej o programie EndoEstetica', tags: [] },
+      ];
+    }
     ghlLeadsCache = leads;
     ghlLeadsLastSync = now;
     res.json({ leads });
   } catch (err) {
     console.error('[API] Get leads error:', err.message);
     res.json({ leads: ghlLeadsCache || [], error: err.message });
+  }
+});
+
+// ─── API: Usuń zgłoszenie (opportunity) z GHL ─────────────────────────────────
+app.delete('/api/leads/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await ghlApi.delete(`/opportunities/${id}`);
+    // Invalidate cache
+    ghlLeadsCache = null;
+    ghlLeadsLastSync = 0;
+    console.log(`[GHL] Deleted opportunity ${id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[GHL] Delete opportunity error:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
   }
 });
 

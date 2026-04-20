@@ -33,11 +33,11 @@ a{text-decoration:none;color:inherit}
 #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--navy)}
 .login-card{background:var(--white);padding:36px 32px;width:400px;border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg)}
 .login-logo{text-align:center;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:20px}
-.login-logo h1{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:1px;text-transform:uppercase}
-.login-logo p{font-size:10px;color:var(--text-muted);margin-top:4px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
-.login-section-label{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin:16px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--border)}
-.user-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.user-btn{padding:8px 10px;font-size:11px;font-weight:600;border:1px solid var(--border);transition:all .15s;text-align:center;letter-spacing:.3px;background:var(--beige);color:var(--navy);border-radius:4px}
+.login-logo h1{font-size:20px;font-weight:800;color:var(--navy);letter-spacing:1px;text-transform:uppercase}
+.login-logo p{font-size:11px;color:var(--text-muted);margin-top:4px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.login-section-label{font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin:16px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.user-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.user-btn{padding:10px 12px;font-size:13px;font-weight:600;border:1px solid var(--border);transition:all .15s;text-align:center;letter-spacing:.2px;background:var(--beige);color:var(--navy);border-radius:4px}
 .user-btn:hover,.user-btn.selected{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .user-btn.caretaker{background:#eef2f7;color:var(--navy-mid);border-color:#d0dce8}
 .user-btn.caretaker:hover,.user-btn.caretaker.selected{background:var(--navy-mid);color:var(--white);border-color:var(--navy-mid)}
@@ -60,14 +60,14 @@ a{text-decoration:none;color:inherit}
 #app.visible{display:flex}
 .sidebar{width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
 .sidebar-header{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
-.sidebar-brand{font-size:12px;font-weight:800;color:var(--white);letter-spacing:1px;text-transform:uppercase}
-.sidebar-user{font-size:10px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:500}
-.sidebar-role{display:inline-block;font-size:8px;font-weight:700;padding:2px 7px;margin-top:6px;letter-spacing:.6px;text-transform:uppercase;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5)}
-.nav-section{padding:14px 16px 5px;font-size:8px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:1px;text-transform:uppercase}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);cursor:pointer;transition:all .15s;border-left:2px solid transparent;margin:1px 0;letter-spacing:.2px}
-.nav-item:hover{background:rgba(255,255,255,.05);color:var(--white)}
-.nav-item.active{background:rgba(212,184,150,.08);color:var(--accent);border-left-color:var(--accent);font-weight:600}
-.nav-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0}
+.sidebar-brand{font-size:14px;font-weight:800;color:var(--white);letter-spacing:1px;text-transform:uppercase}
+.sidebar-user{font-size:12px;color:rgba(255,255,255,.55);margin-top:4px;font-weight:500}
+.sidebar-role{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;margin-top:6px;letter-spacing:.6px;text-transform:uppercase;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5)}
+.nav-section{padding:14px 16px 5px;font-size:9px;font-weight:700;color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:11px;padding:11px 18px;font-size:14px;font-weight:500;color:rgba(255,255,255,.6);cursor:pointer;transition:all .15s;border-left:2px solid transparent;margin:1px 0;letter-spacing:.1px}
+.nav-item:hover{background:rgba(255,255,255,.06);color:var(--white)}
+.nav-item.active{background:rgba(212,184,150,.1);color:var(--accent);border-left-color:var(--accent);font-weight:700}
+.nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
 .nav-badge{margin-left:auto;background:var(--red);color:var(--white);font-size:8px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center}
 .nav-badge.accent{background:var(--accent);color:var(--navy)}
 .sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08)}
@@ -98,12 +98,12 @@ a{text-decoration:none;color:inherit}
 .kpi-tile.red .kpi-value{color:var(--red)}
 
 /* ═══ CALL ITEMS ══════════════════════════════════════════════════════════════ */
-.call-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);background:var(--white);margin-bottom:6px;transition:border-color .15s;border-radius:var(--r)}
+.call-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);background:var(--white);margin-bottom:6px;transition:border-color .15s;border-radius:var(--r)}
 .call-item:hover{border-color:var(--navy-mid)}
-.call-avatar{width:32px;height:32px;background:var(--navy);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;border-radius:50%}
+.call-avatar{width:36px;height:36px;background:var(--navy);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;border-radius:50%}
 .call-info{flex:1;min-width:0}
-.call-name{font-size:13px;font-weight:600}
-.call-sub{font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-name{font-size:14px;font-weight:600}
+.call-sub{font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .call-actions{display:flex;gap:5px;flex-shrink:0;align-items:center}
 .act-btn{padding:5px 10px;font-size:10px;font-weight:600;transition:all .15s;letter-spacing:.2px;border:1px solid transparent;border-radius:4px}
 .act-call{background:var(--green-light);color:var(--green);border-color:#bbf7d0}
@@ -470,13 +470,27 @@ a{text-decoration:none;color:inherit}
 .audio-duration{font-size:10px;color:var(--text-muted);font-weight:600;white-space:nowrap}
 
 /* ═══ CALL LOG TABS ═══════════════════════════════════════════════════════════ */
-.calls-filter-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
-.filter-chip{padding:4px 10px;font-size:10px;font-weight:600;border:1px solid var(--border);color:var(--text-muted);background:var(--white);cursor:pointer;transition:all .15s;letter-spacing:.2px;border-radius:20px}
+.calls-filter-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.filter-chip{padding:6px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--text-muted);background:var(--white);cursor:pointer;transition:all .15s;letter-spacing:.1px;border-radius:20px}
 .filter-chip.active{background:var(--navy);color:var(--white);border-color:var(--navy)}
 
 /* ═══ SECTION DIVIDER ═════════════════════════════════════════════════════════ */
 .section-divider{font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px;margin-top:16px}
 .section-divider:first-child{margin-top:0}
+/* Licznik czasu zgłoszenia */
+.lead-timer{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.lead-timer.ok{background:#dcfce7;color:#15803d}
+.lead-timer.warn{background:#fef9c3;color:#a16207}
+.lead-timer.overdue{background:var(--red-light);color:var(--red)}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.4}}
+.lead-timer.overdue.blink{animation:pulse-red 1.2s ease-in-out infinite}
+/* Tagi źródła */
+.source-tag{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.2px;text-transform:uppercase;margin-right:4px}
+.source-tag.smart-day{background:#e0f2fe;color:#0369a1}
+.source-tag.audyt-360{background:#f3e8ff;color:#7c3aed}
+.source-tag.other{background:var(--beige-dark);color:var(--text-muted)}
+/* Opis problemu w zgłoszeniu */
+.lead-problem{font-size:11px;color:var(--text-muted);margin-top:3px;font-style:italic}
 </style>
 </head>
 <body>
@@ -948,7 +962,11 @@ a{text-decoration:none;color:inherit}
       <button class="widget-close" onclick="toggleWidget()">✕</button>
     </div>
     <div class="widget-body">
-      <input type="text" class="widget-display" id="widget-display" placeholder="Numer..." readonly>
+      <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button class="widget-key" style="flex-shrink:0;padding:8px 10px;font-size:13px;font-weight:700" onclick="widgetAddPrefix('+48')">+48</button>
+        <input type="text" class="widget-display" id="widget-display" placeholder="Numer..." style="flex:1;margin-bottom:0" value="+48">
+        <button class="widget-key del" style="flex-shrink:0;padding:8px 10px" onclick="widgetDel()">&#9003;</button>
+      </div>
       <div class="widget-grid">
         <button class="widget-key" onclick="widgetKey('1')">1</button>
         <button class="widget-key" onclick="widgetKey('2')">2</button>
@@ -959,10 +977,11 @@ a{text-decoration:none;color:inherit}
         <button class="widget-key" onclick="widgetKey('7')">7</button>
         <button class="widget-key" onclick="widgetKey('8')">8</button>
         <button class="widget-key" onclick="widgetKey('9')">9</button>
-        <button class="widget-key" onclick="widgetKey('0')" style="grid-column:2">0</button>
-        <button class="widget-key del" onclick="widgetDel()">⌫</button>
+        <button class="widget-key" onclick="widgetKey('+')">+</button>
+        <button class="widget-key" onclick="widgetKey('0')">0</button>
+        <button class="widget-key" onclick="widgetKey('#')">#</button>
       </div>
-      <button class="widget-call" onclick="widgetCall()">Zadzwoń</button>
+      <button class="widget-call" onclick="widgetCall()">&#9742; Zadzwoń</button>
     </div>
   </div>
   <div class="widget-toggle" onclick="toggleWidget()">☎</div>
@@ -1598,17 +1617,33 @@ async function renderDashboard() {
     if (leads.length === 0) {
       html += `<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Brak nowych zgłoszeń</div></div>`;
     } else {
-      leads.slice(0, 10).forEach(lead => {
+      const now = Date.now();
+      leads.slice(0, 20).forEach(lead => {
         const initials = (lead.name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+        // Licznik czasu od zgłoszenia
+        const createdMs = lead.createdAt ? new Date(lead.createdAt).getTime() : now;
+        const diffMin = Math.floor((now - createdMs) / 60000);
+        let timerClass = 'ok', timerLabel = '';
+        if (diffMin < 15) { timerClass = 'ok'; timerLabel = diffMin + ' min'; }
+        else if (diffMin < 120) { timerClass = 'warn'; timerLabel = diffMin + ' min'; }
+        else { timerClass = 'overdue blink'; timerLabel = Math.floor(diffMin/60) + 'h ' + (diffMin%60) + 'min'; }
+        // Tag źródła
+        const src = (lead.source || '').toLowerCase();
+        let sourceTag = '';
+        if (src.includes('smart')) sourceTag = '<span class="source-tag smart-day">Smart Day</span>';
+        else if (src.includes('audyt') || src.includes('360')) sourceTag = '<span class="source-tag audyt-360">Audyt 360</span>';
+        else if (lead.source) sourceTag = `<span class="source-tag other">${lead.source}</span>`;
         html += `<div class="call-item">
           <div class="call-avatar">${initials}</div>
           <div class="call-info">
-            <div class="call-name">${lead.name || 'Nieznany'}</div>
-            <div class="call-sub">${lead.phone || '—'} ${lead.z_czym_sie_zglasza ? '· ' + lead.z_czym_sie_zglasza : ''}</div>
+            <div class="call-name">${lead.name || 'Nieznany'} ${sourceTag}</div>
+            <div class="call-sub">${lead.phone || '—'}</div>
+            ${lead.z_czym_sie_zglasza ? `<div class="lead-problem">„${lead.z_czym_sie_zglasza}”</div>` : ''}
           </div>
           <div class="call-actions">
-            <span class="badge badge-new">NOWE</span>
+            <span class="lead-timer ${timerClass}">${timerLabel}</span>
             ${lead.phone ? `<button class="act-btn act-call" onclick="quickCall('${lead.phone}')">&#9742; Zadzwoń</button>` : ''}
+            ${currentUser?.role === 'admin' ? `<button class="act-btn" style="background:#fee2e2;color:#dc2626;border-color:#fca5a5" onclick="deleteLead('${lead.id}')">&#10005;</button>` : ''}
           </div>
         </div>`;
       });
@@ -1746,7 +1781,7 @@ async function renderCalls() {
             <div class="call-info">
               <div class="call-name">${c.patient_name || c.caller_phone || 'Nieznany'}</div>
               <div class="call-sub">${c.caller_phone || '—'} ${time ? '· ' + time : ''} ${dur ? '· ' + dur : ''}</div>
-              ${hasRecording ? `<div class="audio-player" onclick="event.stopPropagation()"><audio controls src="${c.recording_url}" preload="none"></audio><span class="audio-duration">${dur}</span></div>` : ''}
+              ${hasRecording ? `<div class="audio-player" onclick="event.stopPropagation()"><audio controls src="${c.recording_url}" preload="none" style="flex:1;height:30px"></audio><a href="${c.recording_url}" download target="_blank" style="font-size:10px;color:var(--navy);font-weight:600;white-space:nowrap;text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:4px">&#8681; Pobierz</a></div>` : (callId && !callId.startsWith('demo') ? `<button class="act-btn" style="font-size:9px;color:var(--text-muted)" onclick="event.stopPropagation();fetchRecording('${callId}',this)">&#9654; Nagranie</button>` : '')}
             </div>
             <div class="call-actions" onclick="event.stopPropagation()">
               ${statusBadge}
@@ -2151,6 +2186,38 @@ async function quickCall(phone) {
   }
 }
 
+async function fetchRecording(callId, btn) {
+  btn.textContent = 'Pobieranie...';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/call/recording/${callId}`);
+    const data = await res.json();
+    if (data.success && data.link) {
+      const container = btn.closest('.call-info');
+      const player = document.createElement('div');
+      player.className = 'audio-player';
+      player.innerHTML = `<audio controls src="${data.link}" preload="none" style="flex:1;height:30px"></audio><a href="${data.link}" download target="_blank" style="font-size:10px;color:var(--navy);font-weight:600;white-space:nowrap;text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:4px">↓ Pobierz</a>`;
+      btn.replaceWith(player);
+    } else {
+      btn.textContent = 'Brak nagrania';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = 'Błąd';
+    btn.disabled = false;
+  }
+}
+
+async function deleteLead(oppId) {
+  if (!confirm('Usunąć to zgłoszenie z GHL? Tej operacji nie można cofnąć.')) return;
+  try {
+    const res = await fetch(`/api/leads/${oppId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast('Zgłoszenie usunięte', 'success'); renderDashboard(); }
+    else showToast('Błąd: ' + (data.error || ''), 'error');
+  } catch(e) { showToast('Błąd usuwania', 'error'); }
+}
+
 async function completeTask(taskId, contactId, el) {
   if (!taskId || !contactId) return;
   try {
@@ -2295,11 +2362,18 @@ function widgetDel() {
   const el = document.getElementById('widget-display');
   if (el) el.value = el.value.slice(0,-1);
 }
+function widgetAddPrefix(prefix) {
+  const el = document.getElementById('widget-display');
+  if (!el) return;
+  if (!el.value.startsWith(prefix)) el.value = prefix + el.value.replace(/^\+\d{0,3}/,'');
+}
 function widgetCall() {
   const el = document.getElementById('widget-display');
-  if (el && el.value) {
+  if (el && el.value && el.value !== '+48') {
     quickCall(el.value);
     document.getElementById('widget-panel').classList.remove('open');
+  } else {
+    showToast('Wpisz numer telefonu', 'warning');
   }
 }
 
