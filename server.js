@@ -62,20 +62,18 @@ function getRecentCalls(days = 7) {
 const recordingRetryQueue = new Map(); // callId → { attempts, pbxCallId, contactName }
 const RETRY_DELAYS = [5000, 30000, 120000, 300000, 600000, 1200000]; // 5s, 30s, 2min, 5min, 10min, 20min
 
-// ─── Zadarma — podpis API (algorytm ze starszego działającego repozytorium) ───
-// Wzór: base64( binary_hmac_sha1( SECRET, METHOD + md5(paramString) ) )
-// WAŻNE:
-//   1. Podpisujemy METHOD + md5Hash — NIE method + paramString + md5Hash
-//   2. .digest('base64') bezpośrednio (binary base64) — NIE hex→base64
-//   3. Params do URL: ?...&user_key=KEY&sign=SIGN — NIE nagłówek Authorization
+// ─── Zadarma — podpis API (oficjalny algorytm PHP SDK Zadarmy) ────────────────
+// Wzór: base64( hex( hmac_sha1( SECRET, METHOD + paramString + md5(paramString) ) ) )
+// Źródło: oficjalne SDK zadarma/user-api-v1 PHP
+// PHP: base64_encode( hash_hmac('sha1', method+params+md5, secret) )
+// W PHP hash_hmac zwraca hex string (nie binary), więc base64 koduje hex → base64(hex_hmac)
 function zadarmaSign(method, params) {
   const sortedKeys = Object.keys(params).sort();
   const paramString = sortedKeys.map(k => `${k}=${params[k]}`).join('&');
   const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
-  return crypto
-    .createHmac('sha1', ZADARMA_SECRET)
-    .update(`${method}${md5Hash}`)
-    .digest('base64');
+  const signString = method + paramString + md5Hash;
+  const hmacHex = crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('hex');
+  return Buffer.from(hmacHex).toString('base64');
 }
 
 // Weryfikacja podpisu webhooków Zadarma (inny wzór: tylko md5, bez method)
@@ -620,7 +618,46 @@ app.get('/api/call/diagnose', async (req, res) => {
   res.json(result);
 });
 
-// Test autoryzacji Zadarma (uproszczony)
+// Endpoint do testowania podpisu — sprawdza balance żeby potwierdzić autentykację
+app.get('/api/call/test-sign', async (req, res) => {
+  if (!ZADARMA_KEY || !ZADARMA_SECRET) {
+    return res.json({ ok: false, reason: 'Brak kluczy' });
+  }
+  const results = {};
+
+  // Metoda A: method + paramString + md5 → base64(hex_hmac) — oficjalny PHP SDK
+  try {
+    const method = '/v1/info/balance/';
+    const paramString = '';
+    const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
+    const signString = method + paramString + md5Hash;
+    const hmacHex = crypto.createHmac('sha1', ZADARMA_SECRET).update(signString).digest('hex');
+    const sign = Buffer.from(hmacHex).toString('base64');
+    const r = await axios.get('https://api.zadarma.com/v1/info/balance/', {
+      params: { user_key: ZADARMA_KEY, sign }, timeout: 10000
+    });
+    results.methodA = { ok: true, data: r.data, desc: 'method+params+md5 → base64(hex_hmac)' };
+  } catch(e) {
+    results.methodA = { ok: false, error: e.response?.data || e.message, desc: 'method+params+md5 → base64(hex_hmac)' };
+  }
+
+  // Metoda B: method + md5 → base64(binary_hmac) — stare TypeScript repo
+  try {
+    const method = '/v1/info/balance/';
+    const paramString = '';
+    const md5Hash = crypto.createHash('md5').update(paramString).digest('hex');
+    const sign = crypto.createHmac('sha1', ZADARMA_SECRET).update(`${method}${md5Hash}`).digest('base64');
+    const r = await axios.get('https://api.zadarma.com/v1/info/balance/', {
+      params: { user_key: ZADARMA_KEY, sign }, timeout: 10000
+    });
+    results.methodB = { ok: true, data: r.data, desc: 'method+md5 → base64(binary_hmac)' };
+  } catch(e) {
+    results.methodB = { ok: false, error: e.response?.data || e.message, desc: 'method+md5 → base64(binary_hmac)' };
+  }
+
+  res.json({ key: ZADARMA_KEY?.slice(0, 8) + '...', ...results });
+});
+
 app.get('/api/call/test-auth', async (req, res) => {
   if (!ZADARMA_KEY || !ZADARMA_SECRET) {
     return res.json({ ok: false, reason: 'Brak ZADARMA_KEY lub ZADARMA_SECRET w .env' });
