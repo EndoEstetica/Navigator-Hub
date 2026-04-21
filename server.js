@@ -537,12 +537,11 @@ app.post('/api/call/initiate', async (req, res) => {
     }
 
     // Zadarma Click-to-Call API — callback mode
-    // 'from' = numer wewnętrzny recepcji (np. '103'), Zadarma najpierw tu zadzwoni
-    // 'to'   = numer pacjenta
-    // 'predicted: 1' = tryb callback
+    // BEZ predicted → Zadarma najpierw dzwoni do FROM (recepcja), potem łączy z TO (pacjent)
+    // Z predicted:1 → dzwoni do obu jednocześnie (pacjent słyszy "proszę czekać")
     const from = agentPhone || process.env.ZADARMA_DEFAULT_EXT || '103';
     const to   = phoneNumber;
-    const callParams = { from, to, predicted: '1' };
+    const callParams = { from, to };
     const sign = zadarmaSign('/v1/request/callback/', callParams);
     // Buduj URL ręcznie z tym samym kodowaniem co podpis
     const sortedCallParams = {}; Object.keys(callParams).sort().forEach(k => sortedCallParams[k] = callParams[k]);
