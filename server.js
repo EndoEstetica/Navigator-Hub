@@ -909,14 +909,19 @@ const SONIA_ID = 'sonia';
 app.post('/api/chat/send', (req, res) => {
   const { fromUserId, toUserId, text } = req.body;
   if (!fromUserId || !toUserId || !text) return res.status(400).json({ error: 'Missing fields' });
-  // Klucz konwersacji: zawsze sortowany (by obie strony widziały tę samą historię)
   const convKey = [fromUserId, toUserId].sort().join(':');
   if (!chatMessages[convKey]) chatMessages[convKey] = [];
-  const msg = { from: fromUserId, to: toUserId, text, ts: new Date().toISOString(), id: `msg_${Date.now()}_${Math.random().toString(36).slice(2,6)}` };
+  const fromUser = USERS[fromUserId];
+  const msg = {
+    from: fromUserId,
+    fromName: fromUser?.name || fromUserId,
+    to: toUserId,
+    text,
+    ts: new Date().toISOString(),
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
+  };
   chatMessages[convKey].push(msg);
-  // Ogranicz do 500 wiadomości per konwersacja
   if (chatMessages[convKey].length > 500) chatMessages[convKey] = chatMessages[convKey].slice(-500);
-  // Broadcast przez WebSocket — tylko do uczestników konwersacji
   broadcast({ type: 'CHAT_PRIVATE', convKey, msg });
   res.json({ success: true, msg });
 });

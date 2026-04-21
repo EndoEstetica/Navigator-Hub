@@ -198,7 +198,7 @@ async function loadChatHistory(convKey) {
 
 function renderChatMessages(container, messages) {
   if (messages.length === 0) {
-    container.innerHTML = '<p style="padding:12px;color:#888;font-size:12px;">Brak wiadomości. Napisz do Soni.</p>';
+    container.innerHTML = '<p style="padding:12px;color:#888;font-size:12px;">Brak wiadomości. Opisz sprawę lub problem.</p>';
     return;
   }
   container.innerHTML = '';
@@ -207,7 +207,13 @@ function renderChatMessages(container, messages) {
     const div = document.createElement('div');
     div.className = `sonia-msg ${isMine ? 'sonia-msg-mine' : 'sonia-msg-other'}`;
     const time = m.ts ? new Date(m.ts).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
-    div.innerHTML = `<div class="sonia-msg-text">${escHtml(m.text)}</div><div class="sonia-msg-time">${time}</div>`;
+    // Pokaż imię nadawcy
+    const senderName = isMine ? 'Ty' : (m.fromName || m.from || '?');
+    div.innerHTML = `
+      <div class="sonia-msg-sender">${escHtml(senderName)}</div>
+      <div class="sonia-msg-text">${escHtml(m.text)}</div>
+      <div class="sonia-msg-time">${time}</div>
+    `;
     container.appendChild(div);
   });
   container.scrollTop = container.scrollHeight;
