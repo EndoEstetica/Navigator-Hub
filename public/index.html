@@ -550,6 +550,7 @@
 
         <!-- Przyciski zapisu -->
         <div class="popup-footer">
+          <button class="btn-secondary" onclick="if(currentContact?.id) openPatientCard(currentContact.id, currentContact.name); else showToast('Brak danych pacjenta', 'error')">👤 Karta pacjenta</button>
           <button class="btn-secondary" onclick="closeCallPopup()">Anuluj</button>
           <button class="btn-primary" onclick="saveReport()">💾 Zapisz raport</button>
         </div>
@@ -634,3 +635,45 @@
 
 </body>
 </html>
+
+  <!-- ==================== PATIENT CARD MODAL ==================== -->
+  <div id="patientCardModal" class="modal-popup hidden">
+    <div class="popup-overlay" onclick="closePatientCard()"></div>
+    <div class="modal-content" style="width: 600px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 id="patientCardTitle">Karta Pacjenta</h3>
+        <button class="popup-close" onclick="closePatientCard()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Informacje pacjenta -->
+        <div id="patientCardInfo" style="padding: 16px; border-bottom: 1px solid #e2e8f0;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div>
+              <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Imię i nazwisko</div>
+              <div id="patientCardName" style="font-size: 16px; font-weight: 700; color: #1e293b;">—</div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Telefon</div>
+              <div id="patientCardPhone" style="font-size: 16px; font-weight: 700; color: #3b82f6;">—</div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Email</div>
+              <div id="patientCardEmail" style="font-size: 14px; color: #1e293b;">—</div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase;">Źródło</div>
+              <div id="patientCardSource" style="font-size: 14px; color: #1e293b;">—</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Timeline aktywności -->
+        <div style="padding: 16px;">
+          <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #1e293b;">Historia aktywności</h4>
+          <div id="patientCardTimeline" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Ładowanie...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

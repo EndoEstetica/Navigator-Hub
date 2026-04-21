@@ -841,6 +841,144 @@ app.get('/api/call/test-auth', async (req, res) => {
   }
 });
 
+// ─── SYSTEM ZADAŃ (Task Pool) ─────────────────────────────────────────────
+const tasksPool = new Map(); // taskId -> { id, title, description, contactId, contactName, dueDate, assignedTo, status, createdBy, createdAt }
+let taskIdCounter = 1000;
+
+app.post('/api/tasks', async (req, res) => {
+  try {
+    const { title, description, contactId, contactName, dueDate, assignedTo } = req.body;
+    const userId = req.headers['x-user-id'] || 'unknown';
+    
+    const taskId = `task_${taskIdCounter++}`;
+    const task = {
+      id: taskId,
+      title,
+      description,
+      contactId,
+      contactName,
+      dueDate,
+      assignedTo: assignedTo || null,
+      status: 'open',
+      createdBy: userId,
+      createdAt: new Date().toISOString()
+    };
+    
+    tasksPool.set(taskId, task);
+    
+    // Synchronizuj z GHL jeśli contactId istnieje
+    if (contactId && assignedTo) {
+      const assignedUser = Object.values(USERS).find(u => u.id === assignedTo);
+      if (assignedUser?.ghlUserId) {
+        try {
+          await axios.post(
+            `https://services.leadconnectorhq.com/contacts/${contactId}/tasks`,
+            {
+              title,
+              body: description,
+              dueDate: new Date(dueDate).toISOString().split('T')[0],
+              assignedTo: assignedUser.ghlUserId
+            },
+            { headers: ghlHeaders, timeout: 10000 }
+          );
+        } catch(e) { console.error('[GHL Task] Sync error:', e.message); }
+      }
+    }
+    
+    broadcast({ type: 'TASK_CREATED', task });
+    res.json({ success: true, task });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/tasks', (req, res) => {
+  const userId = req.query.userId;
+  const filter = req.query.filter || 'all'; // all, mine, unassigned
+  
+  let tasks = Array.from(tasksPool.values());
+  
+  if (filter === 'mine' && userId) {
+    tasks = tasks.filter(t => t.assignedTo === userId);
+  } else if (filter === 'unassigned') {
+    tasks = tasks.filter(t => !t.assignedTo);
+  }
+  
+  tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  res.json({ tasks });
+});
+
+app.patch('/api/tasks/:id', (req, res) => {
+  const task = tasksPool.get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  
+  const { assignedTo, status } = req.body;
+  if (assignedTo !== undefined) task.assignedTo = assignedTo;
+  if (status !== undefined) task.status = status;
+  
+  tasksPool.set(req.params.id, task);
+  broadcast({ type: 'TASK_UPDATED', task });
+  res.json({ success: true, task });
+});
+
+// ─── KARTA PACJENTA (Patient Card) ──────────────────────────────────────────────
+app.get('/api/contact/:id/card', async (req, res) => {
+  try {
+    const contactId = req.params.id;
+    const contactResp = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}`,
+      { headers: ghlHeaders, timeout: 10000 }
+    );
+    const contact = contactResp.data?.contact || {};
+
+    const activitiesResp = await axios.get(
+      `https://services.leadconnectorhq.com/contacts/${contactId}/activities?limit=50`,
+      { headers: ghlHeaders, timeout: 10000 }
+    );
+    const activities = activitiesResp.data?.activities || [];
+
+    const oppsResp = await axios.get(
+      `https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}&limit=10`,
+      { headers: ghlHeaders, timeout: 10000 }
+    );
+    const opportunities = oppsResp.data?.opportunities || [];
+
+    res.json({
+      contact: {
+        id: contact.id,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        source: contact.source,
+        customFields: contact.customFields || [],
+        tags: contact.tags || [],
+        createdAt: contact.createdAt
+      },
+      timeline: activities.map(a => ({
+        id: a.id,
+        type: a.type,
+        description: a.description,
+        createdAt: a.createdAt,
+        userId: a.userId,
+        userName: a.userName
+      })),
+      opportunities: opportunities.map(o => ({
+        id: o.id,
+        title: o.title,
+        status: o.status,
+        stageId: o.pipelineStageId,
+        stageName: GHL_STAGES[o.pipelineStageId],
+        value: o.monetaryValue,
+        updatedAt: o.updatedAt
+      }))
+    });
+  } catch (err) {
+    console.error('[Patient Card] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── STATYSTYKI (G) ───────────────────────────────────────────────────────────
 app.get('/api/stats', async (req, res) => {
   try {
@@ -901,10 +1039,10 @@ const USERS = {
   kasia:      { id: 'kasia',      name: 'Kasia',      role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
   agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',  role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
   asia:       { id: 'asia',       name: 'Asia',        role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
-  agata_r:    { id: 'agata_r',    name: 'Agata (R)',   role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  agata_r:    { id: 'agata_r',    name: 'Agata',       role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
+  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
   zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',  role: 'reception', ext: '103', ghlUserId: null },
-  aneta:      { id: 'aneta',      name: 'Aneta',       role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
-  agata_o:    { id: 'agata_o',    name: 'Agata (O)',   role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
   bartosz:    { id: 'bartosz',    name: 'Bartosz',     role: 'admin',     ext: null,  ghlUserId: null },
   sandra:     { id: 'sandra',     name: 'Sandra',      role: 'admin',     ext: null,  ghlUserId: null },
   aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',   role: 'admin',     ext: null,  ghlUserId: null },

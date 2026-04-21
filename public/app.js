@@ -2295,3 +2295,59 @@ function updateKPIs() {
   // KPI są aktualizowane przez loadNewLeads(), loadCalls() i updateMissedKPI()
   // Ta funkcja jest pozostawiona jako placeholder dla przyszłych rozszerzeń
 }
+
+
+// ==================== PATIENT CARD ====================
+async function openPatientCard(contactId, contactName) {
+  const modal = document.getElementById('patientCardModal');
+  if (!modal) return;
+  
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+  
+  // Ustaw tytuł
+  document.getElementById('patientCardTitle').textContent = `Karta Pacjenta: ${contactName || 'Ładowanie...'}`;
+  
+  // Wyczyść timeline
+  document.getElementById('patientCardTimeline').innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Ładowanie...</div>';
+  
+  try {
+    const response = await fetch(`/api/contact/${contactId}/card`);
+    if (!response.ok) throw new Error('Błąd pobierania karty pacjenta');
+    const data = await response.json();
+    
+    // Wypełnij dane kontaktu
+    const contact = data.contact || {};
+    document.getElementById('patientCardName').textContent = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || '—';
+    document.getElementById('patientCardPhone').textContent = contact.phone || '—';
+    document.getElementById('patientCardEmail').textContent = contact.email || '—';
+    document.getElementById('patientCardSource').textContent = contact.source || '—';
+    
+    // Wypełnij timeline
+    const timeline = data.timeline || [];
+    const timelineEl = document.getElementById('patientCardTimeline');
+    
+    if (timeline.length === 0) {
+      timelineEl.innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Brak aktywności</div>';
+    } else {
+      timelineEl.innerHTML = timeline.map(activity => `
+        <div style="padding: 12px; border-left: 3px solid #3b82f6; background: #f8fafc; border-radius: 6px;">
+          <div style="font-size: 12px; color: #64748b; font-weight: 600;">${new Date(activity.createdAt).toLocaleString('pl-PL')}</div>
+          <div style="font-size: 13px; color: #1e293b; margin-top: 4px;">${activity.description || activity.type || '—'}</div>
+          ${activity.userName ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Przez: ${activity.userName}</div>` : ''}
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('[Patient Card] Error:', err);
+    document.getElementById('patientCardTimeline').innerHTML = `<div style="padding: 12px; background: #fef2f2; border-radius: 8px; color: #ef4444; text-align: center;">Błąd: ${err.message}</div>`;
+  }
+}
+
+function closePatientCard() {
+  const modal = document.getElementById('patientCardModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}

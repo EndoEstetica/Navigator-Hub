@@ -509,6 +509,23 @@ body {
   flex-shrink: 0;
 }
 
+.lead-actions button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lead-actions button:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
 /* ============================================================
    DIALER & CHAT WIDGETS
    ============================================================ */
