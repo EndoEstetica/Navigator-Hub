@@ -172,16 +172,28 @@ function initSoniaChat() {
 }
 
 function toggleSoniaChat() {
-  soniaChatOpen = !soniaChatOpen;
   const panel = document.getElementById('soniaChatPanel');
-  if (panel) {
-    panel.classList.toggle('hidden', !soniaChatOpen);
-  }
-  // Odśwież przy otwarciu
-  if (soniaChatOpen) {
+  if (!panel) return;
+  
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    panel.classList.remove('minimized');
+    soniaChatOpen = true;
     if (currentUser?.id === 'sonia') loadSoniaInbox();
     else if (currentConvKey) loadChatHistory(currentConvKey);
+  } else if (!panel.classList.contains('minimized')) {
+    panel.classList.add('minimized');
+  } else {
+    panel.classList.add('hidden');
+    panel.classList.remove('minimized');
+    soniaChatOpen = false;
   }
+}
+
+function minimizeSoniaChat(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('soniaChatPanel');
+  if (panel) panel.classList.toggle('minimized');
 }
 
 async function loadChatHistory(convKey) {
@@ -2024,37 +2036,60 @@ function initDialer() {
   const widget = document.getElementById('dialerWidget');
   if (!widget) return;
   widget.innerHTML = `
+    <div id="dialerPanel" class="dialer-panel hidden">
+      <div class="widget-header" onclick="minimizeDialer()">
+        <span class="widget-title">📞 Klawiatura</span>
+        <div class="widget-actions">
+          <button class="widget-btn" onclick="minimizeDialer(event)" title="Minimalizuj">_</button>
+          <button class="widget-btn" onclick="event.stopPropagation(); toggleDialer()">✕</button>
+        </div>
+      </div>
+      <div class="dialer-body">
+        <input id="dialerInput" class="dialer-input" type="tel" value="+48" placeholder="+48 000 000 000"
+               oninput="dialerNumber=this.value" onkeydown="if(event.key==='Enter')dialerCall()"/>
+        <div class="dialer-grid">
+          ${['1','2','3','4','5','6','7','8','9','*','0','#'].map(k => `
+            <button class="dialer-key" onclick="dialerPress('${k}')">${k}</button>
+          `).join('')}
+        </div>
+        <div class="dialer-actions">
+          <button class="dialer-del" onclick="dialerDelete()" title="Usuń">⌫</button>
+          <button class="dialer-call-btn" onclick="dialerCall()">Zadzwoń</button>
+        </div>
+      </div>
+    </div>
     <button id="dialerToggleBtn" onclick="toggleDialer()" title="Klawiatura">
       <span id="dialerToggleIcon">📞</span>
     </button>
-    <div id="dialerPanel" class="dialer-panel hidden">
-      <div class="dialer-header">
-        <span class="dialer-title">Zadzwoń</span>
-        <button class="dialer-close" onclick="toggleDialer()">✕</button>
-      </div>
-      <input id="dialerInput" class="dialer-input" type="tel" value="+48" placeholder="+48 000 000 000"
-             oninput="dialerNumber=this.value" onkeydown="if(event.key==='Enter')dialerCall()"/>
-      <div class="dialer-grid">
-        ${['1','2','3','4','5','6','7','8','9','*','0','#'].map(k => `
-          <button class="dialer-key" onclick="dialerPress('${k}')">${k}</button>
-        `).join('')}
-      </div>
-      <div class="dialer-actions">
-        <button class="dialer-del" onclick="dialerDelete()" title="Usuń">⌫</button>
-        <button class="dialer-call-btn" onclick="dialerCall()">📞 Zadzwoń</button>
-      </div>
-    </div>
   `;
 }
 
 function toggleDialer() {
-  dialerOpen = !dialerOpen;
   const panel = document.getElementById('dialerPanel');
   const icon  = document.getElementById('dialerToggleIcon');
   if (!panel) return;
-  panel.classList.toggle('hidden', !dialerOpen);
-  if (icon) icon.textContent = dialerOpen ? '✕' : '📞';
-  if (dialerOpen) setTimeout(() => document.getElementById('dialerInput')?.focus(), 50);
+  
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    panel.classList.remove('minimized');
+    dialerOpen = true;
+    if (icon) icon.textContent = '✕';
+    setTimeout(() => document.getElementById('dialerInput')?.focus(), 50);
+  } else if (!panel.classList.contains('minimized')) {
+    panel.classList.add('minimized');
+    if (icon) icon.textContent = '📞';
+  } else {
+    panel.classList.add('hidden');
+    panel.classList.remove('minimized');
+    dialerOpen = false;
+    if (icon) icon.textContent = '📞';
+  }
+}
+
+function minimizeDialer(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('dialerPanel');
+  if (panel) panel.classList.toggle('minimized');
 }
 
 function dialerPress(key) {
