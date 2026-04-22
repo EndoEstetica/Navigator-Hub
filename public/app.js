@@ -1884,88 +1884,11 @@ async function loadAndRenderStats() {
 }
 
 function renderAdminStats(container, data) {
-  const s = data.stats || {};
-  const total = s.totalCalls || 0;
-  const answered = s.answered || 0;
-  const missed = s.missed || 0;
-  const outbound = s.outbound || 0;
-  const answeredPct = s.answeredPercent || 0;
-  const newLeads = s.newLeads || 0;
-
-  if (total === 0) {
-    container.innerHTML = `
-      <div class="stats-empty">
-        <div class="stats-empty-icon">📊</div>
-        <h3>Brak połączeń z dziś</h3>
-        <p>Statystyki zostaną uzupełnione po pierwszych rozmowach.</p>
-      </div>
-    `;
-    return;
-  }
-
-  const kpiColor = (val, good, warn) => val >= good ? 'kpi-green' : val >= warn ? 'kpi-yellow' : 'kpi-red';
-
-  container.innerHTML = `
-    <div class="stats-kpi-grid">
-      <div class="stats-kpi-card ${kpiColor(answeredPct, 80, 60)}">
-        <div class="stats-kpi-value">${answeredPct}%</div>
-        <div class="stats-kpi-label">Odbieralność</div>
-        <div class="stats-kpi-sub">Cel: 80%</div>
-      </div>
-      <div class="stats-kpi-card">
-        <div class="stats-kpi-value">${total}</div>
-        <div class="stats-kpi-label">Połączeń dziś</div>
-        <div class="stats-kpi-sub">${outbound} wychodzących</div>
-      </div>
-      <div class="stats-kpi-card ${kpiColor(answered, total * 0.8, total * 0.6)}">
-        <div class="stats-kpi-value">${answered}</div>
-        <div class="stats-kpi-label">Odebranych</div>
-        <div class="stats-kpi-sub">${missed} nieodebranych</div>
-      </div>
-      <div class="stats-kpi-card ${kpiColor(newLeads, 5, 2)}">
-        <div class="stats-kpi-value">${newLeads}</div>
-        <div class="stats-kpi-label">Nowych zgłoszeń</div>
-        <div class="stats-kpi-sub">W pipeline</div>
-      </div>
-    </div>
-
-    <div class="stats-section">
-      <h3>Rozkład połączeń</h3>
-      <div class="stats-bar-row">
-        <span class="stats-bar-label">Odebrane</span>
-        <div class="stats-bar-track"><div class="stats-bar-fill bar-green" style="width:${total > 0 ? Math.round(answered/total*100) : 0}%"></div></div>
-        <span class="stats-bar-val">${answered}</span>
-      </div>
-      <div class="stats-bar-row">
-        <span class="stats-bar-label">Nieodebrane</span>
-        <div class="stats-bar-track"><div class="stats-bar-fill bar-red" style="width:${total > 0 ? Math.round(missed/total*100) : 0}%"></div></div>
-        <span class="stats-bar-val">${missed}</span>
-      </div>
-      <div class="stats-bar-row">
-        <span class="stats-bar-label">Wychodzące</span>
-        <div class="stats-bar-track"><div class="stats-bar-fill bar-blue" style="width:${total > 0 ? Math.round(outbound/total*100) : 0}%"></div></div>
-        <span class="stats-bar-val">${outbound}</span>
-      </div>
-    </div>
-
-    <div class="stats-section">
-      <h3>Ostatnie połączenia</h3>
-      <table class="stats-calls-table">
-        <thead><tr><th>Pacjent</th><th>Kierunek</th><th>Status</th><th>Czas</th><th>Czas trwania</th></tr></thead>
-        <tbody>
-          ${(data.recentCalls || []).slice(0, 20).map(c => `
-            <tr>
-              <td>${c.contactName || c.from || '—'}</td>
-              <td>${c.direction === 'outbound' ? '📤 Wychodzące' : '📞 Przychodzące'}</td>
-              <td><span class="call-tag tag-${c.tag || 'unknown'}">${tagLabel(c.tag || 'unknown')}</span></td>
-              <td>${c.timestamp ? new Date(c.timestamp).toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-              <td>${c.duration ? formatDuration(c.duration) : '—'}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+  // Nie nadpisujemy kontenera - dane trafiają do elementów HTML zdefiniowanych w index.html
+  updateStatCards(data);
+  renderDonutChart(data);
+  // Ukryj spinner w kontenerze
+  if (container) container.innerHTML = '';
 }
 
 // ==================== CHAT DO SONI (H1/H3) ====================
@@ -2026,32 +1949,38 @@ function updateStatCards(data) {
   const answeredPct = s.answeredPercent || 0;
   const callbackRate = s.callbackRate || 0;
   const unique = data.totalContacts || 0;
+  const connected = (data.callsByStatus || {}).connected || 0;
+  const ineffective = (data.callsByStatus || {}).ineffective || 0;
+  const pct = v => total > 0 ? (v/total*100).toFixed(1)+'%' : '0%';
+  const avgDuration = s.avgDuration || 0;
+  const mins = Math.floor(avgDuration / 60);
+  const secs = avgDuration % 60;
 
   const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Nowe KPI cards (stats-kpi-card)
   setEl('stat-total', total);
+  setEl('stat-total-sub', `Dziś: ${answeredPct}% odebranych`);
   setEl('stat-unique', unique);
   setEl('stat-answered', answeredPct + '%');
+  setEl('stat-answered-sub', `${answered} połączeń`);
   setEl('stat-callback', callbackRate + '%');
-
-  // Podtytuły stat-cards
-  const cards = document.querySelectorAll('.stat-card');
-  if (cards[0]) cards[0].querySelector('.stat-sub') && (cards[0].querySelector('.stat-sub').textContent = `(100%) • zakres wybrany`);
-  if (cards[2]) cards[2].querySelector('.stat-sub') && (cards[2].querySelector('.stat-sub').textContent = `${answered} połączeń`);
+  setEl('stat-callback-sub', `${answered} z ${total}`);
 
   // Tabela szczegółowa
   const tbody = document.getElementById('statsTableBody');
-  if (tbody && total > 0) {
-    const ineffective = (data.callsByStatus || {}).ineffective || 0;
-    const connected = (data.callsByStatus || {}).connected || 0;
-    const pct = v => total > 0 ? (v/total*100).toFixed(1)+'%' : '—';
+  if (tbody) {
     tbody.innerHTML = `
-      <tr><td>Odebrane</td><td>${connected}</td><td>${pct(connected)}</td><td class="trend-up">↑</td></tr>
-      <tr><td>Nieodebrane</td><td>${missed}</td><td>${pct(missed)}</td><td class="trend-down">↓</td></tr>
-      <tr><td>Nieskuteczne (wychodzące)</td><td>${ineffective}</td><td>${pct(ineffective)}</td><td class="trend-neutral">→</td></tr>
-      <tr><td>Wychodzące łącznie</td><td>${s.outbound || 0}</td><td>${pct(s.outbound||0)}</td><td class="trend-neutral">→</td></tr>
-      <tr><td>Zgłoszenia do oddzwonienia</td><td>${missed}</td><td>—</td><td class="trend-up">↑</td></tr>
+      <tr><td>Odebrane</td><td>${connected}</td><td>${pct(connected)}</td></tr>
+      <tr><td>Nieodebrane</td><td>${missed}</td><td>${pct(missed)}</td></tr>
+      <tr><td>Umówione wizyty</td><td>${s.scheduled || 0}</td><td>${pct(s.scheduled || 0)}</td></tr>
+      <tr><td>Follow-up</td><td>${ineffective}</td><td>${pct(ineffective)}</td></tr>
+      <tr><td>Zadania dziś</td><td>${s.tasks || 0}</td><td>—</td></tr>
     `;
   }
+
+  // Czas trwania
+  setEl('stat-avg-duration', `${mins}:${String(secs).padStart(2,'0')}`);
 }
 
 function renderDonutChart(data) {
