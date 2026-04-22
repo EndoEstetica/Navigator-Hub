@@ -637,7 +637,7 @@ function switchView(view) {
   if (view === 'contacts') loadContacts();
   if (view === 'calls') loadCalls();
   if (view === 'stats') loadAndRenderStats();
-  if (view === 'tasks') loadAllTasks();
+  if (view === 'tasks') loadTasks();
 }
 
 function switchTab(tab) {
@@ -1520,7 +1520,7 @@ async function completeTask(taskId, btn) {
   } catch(e) { /* cicho */ }
 
   // Odśwież widok Zadania jeśli otwarty
-  if (currentView === 'tasks') loadAllTasks();
+  if (currentView === 'tasks') loadTasks();
 }
 
 async function toggleTask(taskId, completed) {
