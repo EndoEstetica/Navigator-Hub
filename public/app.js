@@ -134,6 +134,8 @@ function showApp() {
   // Admin: ukryj numer wewnętrzny w interfejsie
   if (currentUser?.role === 'admin') {
     setUserRole('admin');
+  } else if (currentUser?.role === 'opiekun') {
+    setUserRole('opiekun');
   } else {
     setUserRole('reception');
   }
@@ -482,7 +484,10 @@ function updateClock() {
   const headerRole = document.getElementById('headerUserRole');
   const headerAvatar = document.getElementById('headerUserAvatar');
   if (headerName && currentUser) headerName.textContent = currentUser.name || 'Użytkownik';
-  if (headerRole && currentUser) headerRole.textContent = (currentUser.role || 'recepcja').toUpperCase();
+  if (headerRole && currentUser) {
+    const roleLabels = { reception: 'RECEPCJA', opiekun: 'OPIEKUN PACJENTA', admin: 'ADMINISTRACJA' };
+    headerRole.textContent = roleLabels[currentUser.role] || (currentUser.role || 'RECEPCJA').toUpperCase();
+  }
   if (headerAvatar && currentUser) headerAvatar.textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
 }
 
@@ -999,6 +1004,7 @@ function renderCallsTable(calls) {
           <th>Program</th>
           <th>Kierunek</th>
           <th>Status</th>
+          <th>Raport</th>
           <th>Czas</th>
           <th>Czas trwania</th>
           <th>Nagranie</th>
@@ -1063,6 +1069,14 @@ function renderCallRow(c) {
     ? `<span class="program-tag">${escHtml(c.program)}</span>`
     : '<span style="color:#94a3b8;font-size:11px;">—</span>';
 
+  // Status raportu (punkt 8)
+  const hasReport = c.contactType || c.callEffect;
+  const reportStatusHtml = hasReport
+    ? `<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:600;">✓ Uzupełniony</span>`
+    : (c.tag === 'connected'
+      ? `<span style="font-size:11px;padding:3px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-weight:600;cursor:pointer;" onclick="event.stopPropagation();openCallReport('${escHtml(c.callId)}')">⚠ Do uzupełnienia</span>`
+      : '<span style="color:#94a3b8;font-size:11px;">—</span>');
+
   return `
     <tr class="call-row" onclick="openCallReport('${c.callId}')">
       <td>
@@ -1079,6 +1093,7 @@ function renderCallRow(c) {
       <td>${programHtml}</td>
       <td><span style="font-size:13px;">${dirIcon}</span> <span style="font-size:12px;color:#64748b;">${dirLabel}</span></td>
       <td>${tagHtml}</td>
+      <td>${reportStatusHtml}</td>
       <td>
         <div style="font-size:13px;font-weight:600;color:#1e293b;">${time}</div>
         <div style="font-size:11px;color:#94a3b8;">${date}</div>
@@ -1163,16 +1178,108 @@ async function fetchRecording(callId, btn) {
   }
 }
 
-function openCallReport(callId) {
+async function openCallReport(callId) {
   const call = allCalls.find(c => c.callId === callId);
   if (!call) return;
-  openCallPopupForLead(
-    call.contactId || 'unknown',
-    call.contactName || call.from || 'Nieznany',
-    call.from || call.to || '',
-    '',
-    call.oppId || null
-  );
+
+  // Ustaw kontakt i otwórz popup
+  currentOpportunity = call.oppId ? { id: call.oppId } : null;
+  activeCallId = callId;
+
+  openCallPopup({
+    id: call.contactId || 'unknown',
+    name: call.contactName || call.from || 'Nieznany',
+    phone: call.from || call.to || '',
+    zglosza: '',
+    callId: callId,
+    direction: call.direction || 'inbound'
+  });
+
+  // Odblokuj raport (bo połączenie już zakończone)
+  const overlay = document.getElementById('reportBlockOverlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Pokaż tag zakończenia
+  const tagEl = document.getElementById('popupCallTag');
+  if (tagEl && call.tag) {
+    const labels = { connected: 'POŁĄCZONO', missed: 'NIEODEBRANE', ineffective: 'NIESKUTECZNE' };
+    const classes = { connected: 'tag-connected', missed: 'tag-missed', ineffective: 'tag-ineffective' };
+    tagEl.textContent = labels[call.tag] || call.tag;
+    tagEl.className = `call-tag ${classes[call.tag] || ''}`;
+    tagEl.style.display = 'inline-block';
+  }
+
+  // Ukryj timer i hangup (połączenie zakończone)
+  const timerEl = document.getElementById('callTimer');
+  if (timerEl) { timerEl.textContent = call.duration ? formatDuration(call.duration) : '—'; timerEl.classList.remove('hidden'); }
+  const hangupBtn = document.getElementById('popupHangupBtn');
+  if (hangupBtn) hangupBtn.classList.add('hidden');
+  const answerBtn = document.getElementById('popupAnswerBtn');
+  if (answerBtn) answerBtn.style.display = 'none';
+
+  // Pokaż nagranie w popup (punkt 7)
+  updatePopupRecording(call.recordingUrl, callId);
+
+  // Załaduj zapisany raport z serwera (punkt 5 — edycja po zakończeniu)
+  try {
+    const r = await fetch(`/api/calls/${callId}/report`);
+    if (r.ok) {
+      const report = await r.json();
+      if (report.contactType) {
+        // Wypełnij formularz zapisanymi danymi
+        selectStatus(report.contactType);
+        if (report.program) {
+          const progEl = document.getElementById('programLeczenia');
+          if (progEl) progEl.value = report.program;
+        }
+        if (report.outcome) selectOutcome(report.outcome);
+        if (report.notes) {
+          // Wpisz notatki w odpowiednie pole
+          const noteFields = ['stalyNotatka', 'spamNotatka', 'powodRezygnacji', 'powodOdwolania', 'powodZmiany'];
+          noteFields.forEach(fid => { const el = document.getElementById(fid); if (el) el.value = report.notes; });
+        }
+        if (report.recordingUrl) updatePopupRecording(report.recordingUrl, callId);
+      }
+    }
+  } catch(e) { console.error('Load report error:', e); }
+
+  // Usuń z listy niedokończonych raportów
+  removePendingReport(callId);
+}
+
+function updatePopupRecording(url, callId) {
+  const recContainer = document.getElementById('popupRecordingSection');
+  if (!recContainer) return;
+  if (url) {
+    recContainer.innerHTML = `
+      <div style="margin-top:8px;padding:10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
+        <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:6px;">🎙️ Nagranie rozmowy</div>
+        <audio controls src="${url}" style="width:100%;height:36px;"></audio>
+        <a href="${url}" download style="font-size:11px;color:#3b82f6;margin-top:4px;display:inline-block;">⬇ Pobierz</a>
+      </div>`;
+    recContainer.style.display = '';
+  } else if (callId) {
+    recContainer.innerHTML = `
+      <div style="margin-top:8px;padding:10px;background:#eff6ff;border-radius:8px;border:1px solid #bfdbfe;">
+        <button class="btn-secondary" style="font-size:12px;" onclick="tryFetchPopupRecording('${callId}')">🎙️ Sprawdź nagranie</button>
+      </div>`;
+    recContainer.style.display = '';
+  } else {
+    recContainer.style.display = 'none';
+  }
+}
+
+async function tryFetchPopupRecording(callId) {
+  try {
+    const r = await fetch(`/api/call/${callId}/recording`);
+    const data = await r.json();
+    if (data.url) {
+      updatePopupRecording(data.url, callId);
+      showToast('🎙️ Nagranie gotowe', 'success');
+    } else {
+      showToast('Nagranie jeszcze niedostępne', 'info');
+    }
+  } catch(e) { showToast('Błąd pobierania nagrania', 'error'); }
 }
 
 // ==================== CLICK-TO-CALL ====================
@@ -1252,15 +1359,14 @@ function openCallPopup(contact) {
   }
 
   // Timer startuje dopiero po odebraniu połączenia (CALL_ANSWERED)
-  // Dla połączeń wychodzących (click-to-call) timer startuje od razu
-  if (contact.direction === 'outbound') {
-    startCallTimer();
-  } else {
-    // Dla przychodzących - reset timera, czekamy na CALL_ANSWERED
-    stopCallTimer();
-    const timerEl = document.getElementById('callTimer');
-    if (timerEl) timerEl.textContent = '00:00';
-  }
+  // Dla połączeń wychodzących: etap wywoływania NIE wlicza się do czasu rozmowy
+  // Timer zostanie uruchomiony przez handleCallAnswered()
+  stopCallTimer();
+  const timerEl = document.getElementById('callTimer');
+  if (timerEl) { timerEl.textContent = '⏳ Oczekiwanie...'; timerEl.classList.remove('hidden'); }
+  // Pokaż przycisk rozłącz od razu (żeby można było rozłączyć w trakcie dzwonienia)
+  const hangupBtnInit = document.getElementById('popupHangupBtn');
+  if (hangupBtnInit) { hangupBtnInit.classList.remove('hidden'); hangupBtnInit.style.display = ''; }
 }
 
 function openCallPopupForLead(id, name, phone, zglosza, oppId) {
@@ -1294,21 +1400,75 @@ function answerCall() {
   showToast('✅ Połączenie odebrane', 'success');
 }
 
-function hangupCall() {
+async function hangupCall() {
   const tagEl = document.getElementById('popupCallTag');
   if (tagEl) { tagEl.textContent = 'ROZŁĄCZONO'; tagEl.className = 'call-tag tag-missed'; tagEl.style.display = 'inline-block'; }
   stopCallTimer();
-  setTimeout(() => closeCallPopup(), 1500);
+
+  // Wyślij żądanie rozłączenia do serwera → Zadarma API
+  if (activeCallId) {
+    try {
+      await fetch('/api/call/hangup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: activeCallId })
+      });
+    } catch(e) { console.error('[Hangup] Error:', e); }
+  }
+
   showToast('📵 Rozłączono', 'info');
+  // Nie zamykaj popup od razu — pozwól uzupełnić raport
 }
 
-function closeCallPopup() {
+function closeCallPopup(force = false) {
+  // Ostrzeżenie jeśli raport nieuzupełniony (punkt 6)
+  if (!force && activeCallId && !selectedStatus) {
+    const callInStore = allCalls.find(c => c.callId === activeCallId);
+    // Tylko dla zakończonych połączeń, które trwały (nie missed/ineffective)
+    if (callInStore?.tag === 'connected' || callInStore?.status === 'active') {
+      if (!confirm('⚠️ Raport nieuzupełniony — czy na pewno chcesz wyjść?\n\nMożesz wrócić do raportu z widoku Połączenia.')) {
+        return;
+      }
+      // Dodaj do listy niedokończonych raportów
+      addPendingReport(activeCallId, callInStore?.contactName || callInStore?.from);
+    }
+  }
   document.getElementById('callPopup').classList.add('hidden');
   stopCallTimer();
   currentContact = null;
   selectedStatus = null;
   selectedOutcome = null;
   activeCallId = null;
+}
+
+// Lista niedokończonych raportów (punkt 6 — przypomnienia)
+let pendingReports = [];
+
+function addPendingReport(callId, contactName) {
+  if (pendingReports.find(r => r.callId === callId)) return;
+  pendingReports.push({ callId, contactName, addedAt: Date.now() });
+  updatePendingReportsBadge();
+}
+
+function removePendingReport(callId) {
+  pendingReports = pendingReports.filter(r => r.callId !== callId);
+  updatePendingReportsBadge();
+}
+
+function updatePendingReportsBadge() {
+  const indicator = document.getElementById('pendingReportsIndicator');
+  if (!indicator) return;
+  if (pendingReports.length > 0) {
+    indicator.style.display = 'flex';
+    indicator.innerHTML = pendingReports.map(r => `
+      <div class="pending-report-item" onclick="openCallReport('${r.callId}')">
+        ⚠️ Raport do uzupełnienia: <strong>${escHtml(r.contactName || 'Nieznany')}</strong>
+      </div>
+    `).join('');
+  } else {
+    indicator.style.display = 'none';
+    indicator.innerHTML = '';
+  }
 }
 
 function startCallTimer() {
@@ -1450,7 +1610,8 @@ async function saveReport() {
     }
 
     showToast('✅ Raport zapisany pomyślnie', 'success');
-    closeCallPopup();
+    if (activeCallId) removePendingReport(activeCallId);
+    closeCallPopup(true); // force close (raport zapisany)
   } catch (err) {
     showToast(`Błąd zapisu: ${err.message}`, 'error');
   }
@@ -1732,19 +1893,41 @@ function renderTasksList(el, tasks, isMyTasks = false, isPool = false) {
     el.innerHTML = `<div class="empty-state">${isPool ? 'Brak zadań w puli' : 'Brak zadań'}</div>`;
     return;
   }
-  
-  el.innerHTML = tasks.map(t => `
-    <div class="task-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f1f5f9;">
-      <div>
-        <div style="font-weight: 600; color: #1e293b;">${escHtml(t.title)}</div>
-        <div style="font-size: 12px; color: #64748b;">${t.contactName || 'Pacjent'} • ${new Date(t.dueDate).toLocaleDateString('pl-PL')}</div>
+
+  // Kolory przypisania
+  const assignColors = {
+    kasia: '#3b82f6', agnieszka: '#8b5cf6', asia: '#ec4899', agata_r: '#f59e0b',
+    aneta_o: '#10b981', agata_o: '#14b8a6', zastepstwo: '#6b7280',
+    bartosz: '#ef4444', sandra: '#f97316', aneta_a: '#a855f7', patrycja: '#06b6d4', sonia: '#84cc16'
+  };
+
+  el.innerHTML = tasks.map(t => {
+    const assignedColor = assignColors[t.assignedTo] || '#94a3b8';
+    const assignedLabel = t.assignedToName || t.assignedTo || 'Nieprzypisane';
+    const isCompleted = t.status === 'completed';
+    const dueDateStr = t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Bez terminu';
+
+    return `
+    <div class="task-item ${isCompleted ? 'task-completed' : ''}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #f1f5f9; ${isCompleted ? 'opacity:0.5;' : ''}">
+      <div style="flex:1;">
+        <div style="font-weight:600; color:#1e293b; ${isCompleted ? 'text-decoration:line-through;' : ''}">${escHtml(t.title)}</div>
+        <div style="font-size:12px; color:#64748b; margin-top:2px;">
+          ${t.contactName ? escHtml(t.contactName) + ' • ' : ''}${dueDateStr}
+        </div>
+        <div style="margin-top:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:${assignedColor}15; color:${assignedColor}; border:1px solid ${assignedColor}40; font-weight:600;">
+            👤 ${escHtml(assignedLabel)}
+          </span>
+          ${t.createdBy ? `<span style="font-size:10px; color:#94a3b8;">utworzył: ${escHtml(t.createdBy)}</span>` : ''}
+        </div>
       </div>
-      <div style="display: flex; gap: 8px;">
-        ${isPool ? `<button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="claimTask('${t.id}')">Biorę to</button>` : ''}
-        ${!isPool && t.status !== 'completed' ? `<button class="btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="completeTask('${t.id}')">✓</button>` : ''}
+      <div style="display:flex; gap:8px; flex-shrink:0;">
+        ${isPool ? `<button class="btn-primary" style="padding:6px 14px; font-size:12px; border-radius:8px;" onclick="claimTask('${t.id}')">✅ Biorę to</button>` : ''}
+        ${!isPool && !isCompleted ? `<button class="btn-done-task" onclick="completeTask('${t.id}', this)" style="padding:6px 14px; font-size:12px; background:#10b981; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✓ Zrobione</button>` : ''}
+        ${isCompleted ? '<span style="font-size:11px; color:#10b981; font-weight:600;">✓ Wykonane</span>' : ''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function claimTask(taskId) {
@@ -1762,7 +1945,7 @@ async function claimTask(taskId) {
 // completeTask jest zdefiniowana niżej (wersja z animacją i Supabase)
 
 function renderTodayTasks(listEl, tasks) {
-  const active = tasks.filter(t => !completedTaskIds.has(t.id));
+  const active = tasks.filter(t => !completedTaskIds.has(t.id) && t.status !== 'completed');
   if (active.length === 0) {
     listEl.innerHTML = '<div class="empty-state">Brak zadań na dziś ✓</div>';
     return;
@@ -1773,17 +1956,19 @@ function renderTodayTasks(listEl, tasks) {
     item.className = 'task-item';
     item.dataset.taskId = task.id;
     const phone = task.phone || task.contactPhone || '';
-    const note  = task.body || task.note || '';
+    const note  = task.body || task.note || task.description || '';
+    const assignedLabel = task.assignedToName || task.assignedTo || '';
     item.innerHTML = `
       <div class="task-main">
         <div class="task-title">${escHtml(task.title || 'Zadanie')}</div>
         ${note  ? `<div class="task-note">${escHtml(note)}</div>` : ''}
         ${phone ? `<div class="task-phone">📞 ${escHtml(phone)}</div>` : ''}
+        ${assignedLabel ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">👤 ${escHtml(assignedLabel)}</div>` : ''}
       </div>
       <div class="task-meta">
         <span class="task-due">${formatTaskDue(task.dueDate)}</span>
         ${phone ? `<button class="btn-call btn-sm" onclick="event.stopPropagation();initiateCall('${escHtml(phone)}','${escHtml(task.title||'')}')">📞</button>` : ''}
-        <button class="btn-task-done" onclick="completeTask('${task.id}', this)" title="Odznacz jako wykonane">✓ Odznacz</button>
+        <button class="btn-done-task" onclick="completeTask('${task.id}', this)" style="padding:5px 12px; font-size:12px; background:#10b981; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✓ Zrobione</button>
       </div>
     `;
     listEl.appendChild(item);

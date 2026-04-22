@@ -75,6 +75,9 @@
 
     <!-- Główna treść -->
     <main class="main-content">
+      <!-- Wskaźnik niedokończonych raportów (punkt 6) -->
+      <div id="pendingReportsIndicator" class="pending-reports-bar" style="display:none;"></div>
+
       <!-- WIDOK: KOKPIT -->
       <div id="view-dashboard" class="view active">
         <div class="view-header">
@@ -470,6 +473,9 @@
           </button>
         </div>
       </div>
+
+      <!-- Sekcja nagrania w popup (punkt 7) -->
+      <div id="popupRecordingSection" style="padding:0 24px; display:none;"></div>
 
       <!-- Formularz raportu -->
       <div class="popup-report">

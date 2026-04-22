@@ -708,6 +708,47 @@ app.post('/api/call/initiate', async (req, res) => {
   }
 });
 
+// ─── HANGUP CALL (rozłączenie z poziomu pop-upu) ─────────────────────────
+app.post('/api/call/hangup', async (req, res) => {
+  try {
+    const { callId } = req.body;
+    if (!callId) return res.status(400).json({ error: 'Brak callId' });
+
+    const call = callsStore.find(c => c.callId === callId);
+    const pbxCallId = call?.pbxCallId || callId;
+
+    if (ZADARMA_KEY && ZADARMA_SECRET) {
+      // Zadarma API — zakończ aktywne połączenie
+      try {
+        const params = { call_id: pbxCallId };
+        const sign = zadarmaSign('/v1/request/hangup/', params);
+        const sorted = {}; Object.keys(params).sort().forEach(k => sorted[k] = params[k]);
+        const qs = new URLSearchParams(sorted).toString();
+        await axios.get(
+          `https://api.zadarma.com/v1/request/hangup/?${qs}`,
+          { headers: { 'Authorization': zadarmaAuthHeader(sign) }, timeout: 10000 }
+        );
+        console.log(`[Hangup] Połączenie ${callId} rozłączone przez API`);
+      } catch (e) {
+        console.error('[Hangup] Zadarma API error:', e.response?.data || e.message);
+      }
+    }
+
+    // Aktualizuj store niezależnie od wyniku API
+    const duration = call?.answeredAt
+      ? Math.round((Date.now() - new Date(call.answeredAt).getTime()) / 1000)
+      : 0;
+    const tag = duration > 0 ? 'connected' : (call?.direction === 'inbound' ? 'missed' : 'ineffective');
+    storeCall({ callId, status: 'ended', duration, tag, endedAt: new Date().toISOString() });
+    broadcast({ type: 'CALL_ENDED', callId, duration, tag, direction: call?.direction || 'inbound' });
+
+    res.json({ success: true, callId, duration, tag });
+  } catch (err) {
+    console.error('[Hangup] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DIAGNOSTYKA ZADARMA ──────────────────────────────────────────────────────
 
 // Pełna diagnostyka: auth + lista wewnętrznych + status rejestracji
@@ -1279,11 +1320,13 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
   if (existing) {
     if (contactType)   existing.contactType   = contactType;
     if (callEffect)    existing.callEffect    = callEffect;
-    if (notes)         existing.notes         = notes;
+    if (notes !== undefined) existing.notes    = notes;
     if (program)       existing.program       = program;
     if (outcome)       existing.outcome       = outcome;
     if (userId)        existing.userId        = userId;
     if (recordingUrl)  existing.recordingUrl  = recordingUrl;
+    existing.reportSavedAt = new Date().toISOString();
+    existing.reportSavedBy = userId || existing.userId;
   }
 
   // Zapisz do Supabase
@@ -1292,15 +1335,15 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
       const updates = {
         updated_at: new Date().toISOString()
       };
-      if (contactType)   updates.contact_type   = contactType;
-      if (callEffect)    updates.call_effect    = callEffect;
-      if (notes)         updates.notes          = notes;
-      if (program)       updates.treatment      = program;
-      if (outcome)       updates.call_reason    = outcome;
-      if (userId)        updates.user_id        = userId;
-      if (contactId)     updates.ghl_contact_id = contactId;
-      if (contactName)   updates.patient_name   = contactName;
-      if (recordingUrl)  updates.recording_url  = recordingUrl;
+      if (contactType)        updates.contact_type   = contactType;
+      if (callEffect)         updates.call_effect    = callEffect;
+      if (notes !== undefined) updates.notes          = notes;
+      if (program)            updates.treatment      = program;
+      if (outcome)            updates.call_reason    = outcome;
+      if (userId)             updates.user_id        = userId;
+      if (contactId)          updates.ghl_contact_id = contactId;
+      if (contactName)        updates.patient_name   = contactName;
+      if (recordingUrl)       updates.recording_url  = recordingUrl;
 
       const { error } = await supabase.from('calls')
         .update(updates)
@@ -1311,8 +1354,170 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
     }
   }
 
-  broadcast({ type: 'CALL_REPORT_SAVED', callId, contactType, callEffect });
+  broadcast({ type: 'CALL_REPORT_SAVED', callId, contactType, callEffect, userId });
   res.json({ success: true });
+});
+
+// Pobierz raport pojedynczego połączenia
+app.get('/api/calls/:callId/report', async (req, res) => {
+  const { callId } = req.params;
+
+  // Najpierw z in-memory
+  const call = callsStore.find(c => c.callId === callId);
+
+  // Jeśli jest Supabase, pobierz świeże dane
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('calls')
+        .select('*')
+        .eq('call_id', callId)
+        .single();
+      if (!error && data) {
+        return res.json({
+          callId: data.call_id,
+          contactType: data.contact_type,
+          callEffect: data.call_effect,
+          notes: data.notes,
+          program: data.treatment,
+          outcome: data.call_reason,
+          userId: data.user_id,
+          contactName: data.patient_name,
+          contactId: data.ghl_contact_id,
+          recordingUrl: data.recording_url,
+          direction: data.direction,
+          duration: data.duration_seconds,
+          status: data.status,
+          from: data.caller_phone,
+          to: data.called_phone,
+          timestamp: data.created_at,
+          answeredAt: data.answered_at,
+          endedAt: data.ended_at
+        });
+      }
+    } catch(e) { /* fallback to in-memory */ }
+  }
+
+  if (call) {
+    return res.json({
+      callId: call.callId,
+      contactType: call.contactType,
+      callEffect: call.callEffect,
+      notes: call.notes,
+      program: call.program,
+      outcome: call.outcome,
+      userId: call.userId,
+      contactName: call.contactName,
+      contactId: call.contactId,
+      recordingUrl: call.recordingUrl,
+      direction: call.direction,
+      duration: call.duration,
+      status: call.status,
+      from: call.from,
+      to: call.to,
+      timestamp: call.timestamp,
+      answeredAt: call.answeredAt,
+      endedAt: call.endedAt
+    });
+  }
+  res.status(404).json({ error: 'Nie znaleziono połączenia' });
+});
+
+// Historia raportów — admin widzi wszystkie, recepcja tylko swoje
+app.get('/api/reports/history', async (req, res) => {
+  const { userId, role, days } = req.query;
+  const daysNum = parseInt(days) || 30;
+  const since = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000).toISOString();
+
+  if (supabase) {
+    try {
+      let query = supabase.from('calls')
+        .select('*')
+        .not('contact_type', 'is', null) // tylko te z raportem
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      // Recepcja widzi tylko swoje raporty
+      if (role !== 'admin' && userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      const reports = (data || []).map(row => ({
+        callId: row.call_id,
+        contactType: row.contact_type,
+        callEffect: row.call_effect,
+        notes: row.notes,
+        program: row.treatment,
+        outcome: row.call_reason,
+        userId: row.user_id,
+        contactName: row.patient_name,
+        contactId: row.ghl_contact_id,
+        recordingUrl: row.recording_url,
+        direction: row.direction,
+        duration: row.duration_seconds,
+        from: row.caller_phone,
+        to: row.called_phone,
+        timestamp: row.created_at,
+        updatedAt: row.updated_at
+      }));
+      return res.json({ reports });
+    } catch(e) {
+      console.error('[Reports] Error:', e.message);
+    }
+  }
+  // Fallback in-memory
+  let calls = getRecentCalls(daysNum).filter(c => c.contactType);
+  if (role !== 'admin' && userId) calls = calls.filter(c => c.userId === userId);
+  res.json({ reports: calls });
+});
+
+// Statystyki raportów (punkt 4 — admin)
+app.get('/api/reports/stats', async (req, res) => {
+  const { days } = req.query;
+  const daysNum = parseInt(days) || 30;
+  const since = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000).toISOString();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('calls')
+        .select('contact_type, call_effect, treatment, call_reason, user_id')
+        .not('contact_type', 'is', null)
+        .gte('created_at', since);
+
+      if (error) throw new Error(error.message);
+      const rows = data || [];
+
+      const contactTypeCounts = {};
+      const callEffectCounts = {};
+      const programCounts = {};
+      const outcomeCounts = {};
+      const userCounts = {};
+
+      rows.forEach(r => {
+        if (r.contact_type) contactTypeCounts[r.contact_type] = (contactTypeCounts[r.contact_type] || 0) + 1;
+        if (r.call_effect)  callEffectCounts[r.call_effect]   = (callEffectCounts[r.call_effect] || 0) + 1;
+        if (r.treatment)    programCounts[r.treatment]         = (programCounts[r.treatment] || 0) + 1;
+        if (r.call_reason)  outcomeCounts[r.call_reason]       = (outcomeCounts[r.call_reason] || 0) + 1;
+        if (r.user_id)      userCounts[r.user_id]              = (userCounts[r.user_id] || 0) + 1;
+      });
+
+      return res.json({
+        totalReports: rows.length,
+        contactTypeCounts,
+        callEffectCounts,
+        programCounts,
+        outcomeCounts,
+        userCounts
+      });
+    } catch(e) {
+      console.error('[ReportStats] Error:', e.message);
+    }
+  }
+
+  // Fallback
+  res.json({ totalReports: 0, contactTypeCounts: {}, callEffectCounts: {}, programCounts: {}, outcomeCounts: {}, userCounts: {} });
 });
 
 // Pobierz historię połączeń z Supabase (z raportami i nagraniami)

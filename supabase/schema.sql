@@ -49,6 +49,7 @@ CREATE TABLE calls (
   
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   answered_at TIMESTAMPTZ,
   ended_at TIMESTAMPTZ
 );
