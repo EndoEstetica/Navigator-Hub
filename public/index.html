@@ -343,6 +343,34 @@
           </div>
         </div>
 
+        <!-- Reception OS KPI Row -->
+        <div class="stats-kpi-grid" style="margin-top:16px;">
+          <div class="stats-kpi-card kpi-accent-blue">
+            <div class="stats-kpi-icon">🆕</div>
+            <div class="stats-kpi-label">NOWI PACJENCI</div>
+            <div class="stats-kpi-value" id="stat-new-patients">0</div>
+            <div class="stats-kpi-sub" id="stat-first-calls-sub">Pierwszych rozmów: 0</div>
+          </div>
+          <div class="stats-kpi-card kpi-accent-orange">
+            <div class="stats-kpi-icon">⏱️</div>
+            <div class="stats-kpi-label">ŚR. CZAS REAKCJI</div>
+            <div class="stats-kpi-value" id="stat-response-time">—</div>
+            <div class="stats-kpi-sub">od leada do 1. rozmowy</div>
+          </div>
+          <div class="stats-kpi-card kpi-accent-green">
+            <div class="stats-kpi-icon">🔄</div>
+            <div class="stats-kpi-label">FOLLOW-UP</div>
+            <div class="stats-kpi-value" id="stat-followup-done">0/0</div>
+            <div class="stats-kpi-sub" id="stat-followup-overdue-sub">Przeterminowane: 0</div>
+          </div>
+          <div class="stats-kpi-card kpi-accent-red">
+            <div class="stats-kpi-icon">📅</div>
+            <div class="stats-kpi-label">ODWOŁANIA</div>
+            <div class="stats-kpi-value" id="stat-cancellations">0</div>
+            <div class="stats-kpi-sub">wizyt odwołanych</div>
+          </div>
+        </div>
+
         <!-- Wykresy i Tabele -->
         <div class="stats-content-grid">
           <div class="stats-chart-section">
@@ -368,8 +396,30 @@
                 <tr><td>Umówione wizyty</td><td id="stat-table-scheduled">0</td><td id="stat-table-scheduled-pct">0%</td></tr>
                 <tr><td>Follow-up</td><td id="stat-table-followup">0</td><td id="stat-table-followup-pct">0%</td></tr>
                 <tr><td>Zadania dziś</td><td id="stat-table-tasks">0</td><td>—</td></tr>
+                <tr><td>Nowi pacjenci</td><td id="stat-table-new-patients">0</td><td>—</td></tr>
+                <tr><td>Śr. czas reakcji</td><td id="stat-table-response-time">—</td><td>—</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Wykres godzinowy -->
+        <div class="stats-chart-full">
+          <h3>📈 Rozkład połączeń wg godzin</h3>
+          <canvas id="callsByHourChart" height="120"></canvas>
+        </div>
+
+        <!-- Źródła leadów -->
+        <div class="stats-content-grid">
+          <div class="stats-chart-section">
+            <h3>📊 Źródła leadów</h3>
+            <canvas id="leadSourcesChart" width="200" height="200"></canvas>
+          </div>
+          <div class="stats-table-section">
+            <h3>📋 Powody odwołań</h3>
+            <div id="cancellationReasonsList" class="cancellation-list">
+              <p class="empty-state">Brak danych</p>
+            </div>
           </div>
         </div>
 
@@ -471,8 +521,12 @@
         <!-- Wybór statusu — 2x2 kafelki (C7) -->
         <div class="status-selector">
           <label>Status pacjenta:</label>
+          <!-- Alert: blokada "Nowy pacjent" gdy W0 zaplanowane -->
+          <div id="w0BlockNotice" class="w0-block-notice hidden">
+            ⚠️ Ten pacjent ma już zaplanowane W0. Wybierz: <strong>Wizyta bieżąca</strong> lub <strong>Stały pacjent</strong>.
+          </div>
           <div class="status-grid-2x2">
-            <button class="status-tile" data-status="NOWY_PACJENT" onclick="selectStatus('NOWY_PACJENT')">
+            <button class="status-tile" id="tile-NOWY_PACJENT" data-status="NOWY_PACJENT" onclick="selectStatus('NOWY_PACJENT')">
               <span class="status-tile-icon">🆕</span>
               <span class="status-tile-label">NOWY PACJENT</span>
             </button>
@@ -488,6 +542,10 @@
               <span class="status-tile-icon">🚫</span>
               <span class="status-tile-label">SPAM</span>
             </button>
+          </div>
+          <!-- Wskaźnik czasu reakcji -->
+          <div id="responseTimeIndicator" class="response-time-indicator hidden">
+            <span id="responseTimeText">⏱ Czas reakcji: —</span>
           </div>
         </div>
 
@@ -639,20 +697,47 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3>✏️ Prośba o edycję kontaktu</h3>
-        <button class="popup-close" onclick="closeEditRequest()">✕</button>
+        <button class="popup-close" onclick="closeEditRequest()">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p>Zadanie zostanie przypisane do <strong>Soni</strong> w GoHighLevel.</p>
+        <p>Zadanie zostanie przypisane do <strong>Soni</strong> w GoHighLevel i zapisane w systemie.</p>
         <div class="form-group">
-          <label>Opis zmian do wprowadzenia:</label>
+          <label>Pole do zmiany:</label>
+          <select id="editRequestField" class="form-select">
+            <option value="general">Ogólne</option>
+            <option value="phone">Telefon</option>
+            <option value="email">Email</option>
+            <option value="name">Imię i nazwisko</option>
+            <option value="address">Adres</option>
+            <option value="source">Polecenie / źródło</option>
+            <option value="notes">Notatka</option>
+            <option value="other">Inne</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Stara wartość:</label>
+          <input type="text" id="editRequestOldValue" class="form-input" placeholder="Obecna wartość w systemie...">
+        </div>
+        <div class="form-group">
+          <label>Nowa wartość:</label>
+          <input type="text" id="editRequestNewValue" class="form-input" placeholder="Poprawna wartość...">
+        </div>
+        <div class="form-group">
+          <label>Dodatkowe informacje:</label>
           <textarea id="editRequestNotes" class="form-textarea" placeholder="Opisz jakie dane należy zmienić/uzupełnić..."></textarea>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" onclick="closeEditRequest()">Anuluj</button>
-        <button class="btn-primary" onclick="submitEditRequest()">📤 Wyślij do Soni</button>
+        <button class="btn-primary" onclick="submitEditRequest()">&#x1F4E4; Wyślij do Soni</button>
       </div>
     </div>
+  </div>
+
+  <!-- ==================== ALERT: CZAS REAKCJI ==================== -->
+  <div id="responseTimeAlert" class="response-time-alert hidden">
+    <span id="responseTimeAlertText">⏰ Czas reakcji: 0 min</span>
+    <button onclick="document.getElementById('responseTimeAlert').classList.add('hidden')">&#x2715;</button>
   </div>
 
   <!-- ==================== CHAT DO SONI (H1/H3) ==================== -->

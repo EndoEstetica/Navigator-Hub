@@ -151,6 +151,15 @@ function initApp() {
   startPolling();
   initDialer();
   initSoniaChat();
+
+  // Heartbeat: informuj serwer o aktywności użytkownika co 5 minut
+  if (currentUser?.id) {
+    const sendHeartbeat = () => {
+      fetch(`/api/users/${currentUser.id}/heartbeat`, { method: 'POST' }).catch(() => {});
+    };
+    sendHeartbeat(); // Natychmiast po zalogowaniu
+    setInterval(sendHeartbeat, 5 * 60 * 1000); // Co 5 minut
+  }
   
   // Automatycznie pokaż chat Sonia i dialer po zalogowaniu
   setTimeout(() => {
@@ -1485,6 +1494,40 @@ function openCallPopup(contact) {
     manualNameInput.value = contact.name || '';
   }
 
+  // Blokada W0: jeśli kontakt ma zaplanowane W0, pokaż ostrzeżenie i zablokuj kafelek
+  const w0Notice = document.getElementById('w0BlockNotice');
+  const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
+  if (w0Notice && newPatientTile) {
+    if (contact.w0_scheduled) {
+      w0Notice.classList.remove('hidden');
+      newPatientTile.style.opacity = '0.4';
+      newPatientTile.style.cursor = 'not-allowed';
+      newPatientTile.title = 'Ten pacjent ma już zaplanowane W0';
+    } else {
+      w0Notice.classList.add('hidden');
+      newPatientTile.style.opacity = '';
+      newPatientTile.style.cursor = '';
+      newPatientTile.title = '';
+    }
+  }
+
+  // Czas reakcji — pokaż jeśli znamy lead_created_at
+  const respIndicator = document.getElementById('responseTimeIndicator');
+  const respText = document.getElementById('responseTimeText');
+  if (respIndicator && respText && contact.lead_created_at) {
+    const leadCreatedAt = new Date(contact.lead_created_at);
+    const now = new Date();
+    const diffMins = Math.round((now - leadCreatedAt) / 60000);
+    let color = '#16a34a', label = 'OK';
+    if (diffMins >= 120) { color = '#dc2626'; label = '🔴 PILNE'; }
+    else if (diffMins >= 5) { color = '#d97706'; label = '⚠️'; }
+    respText.textContent = `⏱ Czas reakcji: ${diffMins} min ${label}`;
+    respText.style.color = color;
+    respIndicator.classList.remove('hidden');
+  } else if (respIndicator) {
+    respIndicator.classList.add('hidden');
+  }
+
   resetReportForm();
   document.getElementById('callPopup').classList.remove('hidden');
 
@@ -1560,6 +1603,15 @@ async function hangupCall() {
 
   showToast('📵 Rozłączono', 'info');
   // Nie zamykaj popup od razu — pozwól uzupełnić raport
+}
+
+function calculateDelayInDays(targetDateStr) {
+  if (!targetDateStr) return '3d';
+  const target = new Date(targetDateStr);
+  const now = new Date();
+  const diffTime = Math.abs(target - now);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return `${diffDays}d`;
 }
 
 function closeCallPopup(force = false) {
@@ -1653,6 +1705,22 @@ function resetReportForm() {
 
 // ==================== STATUS SELECTION (C7 — 2x2 tiles) ====================
 function selectStatus(status) {
+  // Blokada: jeśli kontakt ma W0, nie można wybrać "Nowy pacjent"
+  if (status === 'NOWY_PACJENT' && currentContact?.w0_scheduled) {
+    const notice = document.getElementById('w0BlockNotice');
+    if (notice) {
+      notice.classList.remove('hidden');
+      // Wstrząśnij kafelkiem
+      const tile = document.getElementById('tile-NOWY_PACJENT');
+      if (tile) { tile.style.animation = 'shake 0.3s'; setTimeout(() => tile.style.animation = '', 400); }
+    }
+    return; // Blokuj wybor
+  }
+
+  // Ukryj blokadę jeśli wybrano inny status
+  const notice = document.getElementById('w0BlockNotice');
+  if (notice) notice.classList.add('hidden');
+
   selectedStatus = status;
   document.querySelectorAll('.status-btn, .status-tile').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`[data-status="${status}"]`);
@@ -1725,21 +1793,33 @@ async function saveReport() {
     if (activeCallId) {
       const notes = reportData.notatka || reportData.powodRezygnacji || reportData.powodOdwolania || reportData.powodZmiany || '';
       const callEffect = reportData.outcome || selectedOutcome || '';
+      
+      // Reception OS: Follow-up logic
+      const followUpDate = document.getElementById('wizytaContactDateTime')?.value;
+      const followUpDelay = followUpDate ? calculateDelayInDays(followUpDate) : null;
+
       try {
+        const payload = {
+          contactType: selectedStatus,
+          callEffect,
+          notes,
+          program: reportData.program || '',
+          outcome: selectedOutcome || '',
+          userId: currentUser?.id || '',
+          contactId: contactId || '',
+          contactName: reportData.manualName || currentContact?.name || '',
+          cancellationReason: reportData.powodOdwolania || '',
+          w0Date: reportData.w0DateTime || null,
+          isFollowUp: !!followUpDelay,
+          followUpDelay: followUpDelay
+        };
+
         await fetch(`/api/calls/${activeCallId}/report`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contactType: selectedStatus,
-            callEffect,
-            notes,
-            program: reportData.program || '',
-            outcome: selectedOutcome || '',
-            userId: currentUser?.id || '',
-            contactId: contactId || '',
-            contactName: reportData.manualName || currentContact?.name || ''
-          })
+          body: JSON.stringify(payload)
         });
+        console.log('[Reception OS] Extended report saved:', payload);
       } catch(e) { console.warn('[Report] Save error:', e.message); }
     }
 
@@ -1773,7 +1853,10 @@ function buildReportData() {
   };
   if (selectedStatus === 'NOWY_PACJENT') {
     data.program = document.getElementById('programLeczenia')?.value;
-    if (selectedOutcome === 'umowil_sie')    data.dataW0 = document.getElementById('dataW0')?.value;
+    if (selectedOutcome === 'umowil_sie') {
+      data.dataW0 = document.getElementById('dataW0')?.value;
+      data.w0DateTime = data.dataW0;
+    }
     if (selectedOutcome === 'prosi_kontakt') data.contactDateTime = document.getElementById('contactDateTime')?.value;
     if (selectedOutcome === 'rezygnacja')    data.powodRezygnacji = document.getElementById('powodRezygnacji')?.value;
   } else if (selectedStatus === 'WIZYTA_BIEZACA') {
@@ -1786,7 +1869,10 @@ function buildReportData() {
     }
   } else if (selectedStatus === 'STALY_PACJENT') {
     data.notatka = document.getElementById('stalyNotatka')?.value;
-    if (selectedOutcome === 'staly_umowil')  data.dataWizyty = document.getElementById('stalyDataWizyty')?.value;
+    if (selectedOutcome === 'staly_umowil') {
+      data.dataWizyty = document.getElementById('stalyDataWizyty')?.value;
+      data.w0DateTime = data.dataWizyty;
+    }
     if (selectedOutcome === 'staly_kontakt') data.contactDateTime = document.getElementById('stalyContactDateTime')?.value;
   } else if (selectedStatus === 'SPAM') {
     data.notatka = document.getElementById('spamNotatka')?.value;
@@ -2110,15 +2196,24 @@ function renderTodayTasks(listEl, tasks) {
     const phone = task.phone || task.contactPhone || '';
     const note  = task.body || task.note || task.description || '';
     const assignedLabel = task.assignedToName || task.assignedTo || '';
+    const isUrgent = task.is_urgent || task.title?.toLowerCase().includes('pilne');
+    const taskTypeIcon = task.task_type === 'follow_up_call' ? '📞' : '📅';
+    if (isUrgent) item.classList.add('urgent-task');
+
     item.innerHTML = `
       <div class="task-main">
-        <div class="task-title">${escHtml(task.title || 'Zadanie')}</div>
+        <div class="task-title">
+          ${isUrgent ? '<span style="color:#ef4444; font-weight:700;">[PILNE]</span> ' : ''}
+          ${taskTypeIcon} ${escHtml(task.title || 'Zadanie')}
+        </div>
         ${note  ? `<div class="task-note">${escHtml(note)}</div>` : ''}
         ${phone ? `<div class="task-phone">📞 ${escHtml(phone)}</div>` : ''}
-        ${assignedLabel ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">👤 ${escHtml(assignedLabel)}</div>` : ''}
+        ${task.contactName ? `<div style="font-size:11px;color:#3b82f6;font-weight:600;margin-top:2px;">👤 Pacjent: ${escHtml(task.contactName)}</div>` : ''}
+        ${assignedLabel ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">🏢 Przypisano: ${escHtml(assignedLabel)}</div>` : ''}
       </div>
       <div class="task-meta">
         <span class="task-due">${formatTaskDue(task.dueDate)}</span>
+        ${task.follow_up_delay ? `<span class="report-tag st-new">${task.follow_up_delay}</span>` : ''}
         ${phone ? `<button class="btn-call btn-sm" onclick="event.stopPropagation();initiateCall('${escHtml(phone)}','${escHtml(task.title||'')}')">📞</button>` : ''}
         <button class="btn-done-task" onclick="completeTask('${task.id}', this)" style="padding:5px 12px; font-size:12px; background:#10b981; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✓ Zrobione</button>
       </div>
@@ -2330,18 +2425,24 @@ async function loadDashboardPool() {
       return;
     }
 
-    listEl.innerHTML = poolTasks.map(t => `
-      <div class="pool-item">
-        <div class="pool-item-info">
-          <div class="pool-item-title">${escHtml(t.title)}</div>
-          <div class="pool-item-meta">
-            ${t.contactName ? escHtml(t.contactName) + ' • ' : ''}
-            ${t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Bez terminu'}
+    listEl.innerHTML = poolTasks.map(t => {
+      const isUrgent = t.is_urgent || t.title.toLowerCase().includes('pilne');
+      const taskTypeIcon = t.task_type === 'follow_up_call' ? '📞' : '📅';
+      const urgentClass = isUrgent ? 'style="border-left: 4px solid #ef4444; background: #fff1f2;"' : '';
+      return `
+        <div class="pool-item" ${urgentClass}>
+          <div class="pool-item-info">
+            <div class="pool-item-title">${isUrgent ? '<span style="color:#ef4444; font-weight:700;">[PILNE]</span> ' : ''}${taskTypeIcon} ${escHtml(t.title)}</div>
+            <div class="pool-item-meta">
+              ${t.contactName ? '<strong>' + escHtml(t.contactName) + '</strong> • ' : ''}
+              ${t.follow_up_delay ? '<span class="report-tag st-new">' + t.follow_up_delay + '</span> • ' : ''}
+              ${t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Bez terminu'}
+            </div>
           </div>
+          <button class="btn-claim" onclick="claimPoolTask('${t.id}', this)">✅ Biorę to</button>
         </div>
-        <button class="btn-claim" onclick="claimPoolTask('${t.id}', this)">✅ Biorę to</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch(e) {
     listEl.innerHTML = '<div class="empty-state" style="padding:16px;">Błąd ładowania</div>';
   }
@@ -2541,6 +2642,9 @@ function closeEditRequest() {
 
 async function submitEditRequest() {
   const notes = document.getElementById('editRequestNotes')?.value;
+  const fieldName = document.getElementById('editRequestField')?.value || 'general';
+  const oldValue = document.getElementById('editRequestOldValue')?.value || '';
+  const newValue = document.getElementById('editRequestNewValue')?.value || '';
 
   if (!editRequestContactId || editRequestContactId === 'undefined') {
     showToast('Brak ID kontaktu', 'error');
@@ -2552,15 +2656,22 @@ async function submitEditRequest() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contactName: editRequestContactName,
-        notes: notes || 'Recepcja prosi o edycję danych kontaktu'
+        notes: notes || 'Recepcja prosi o edycję danych kontaktu',
+        fieldName,
+        oldValue,
+        newValue,
+        requestedBy: currentUser?.id || 'unknown'
       })
     });
     const data = await response.json();
     if (data.success || data.task) {
-      showToast('✅ Zadanie dla Soni utworzone w GHL', 'success');
+      showToast('✅ Prośba o edycję zapisana i wysłana do Soni', 'success');
     } else {
       showToast('Prośba wysłana', 'info');
     }
+    // Wyczyść pola
+    const clearEl = (id) => { const el = document.getElementById(id); if (el) el.value = ''; };
+    clearEl('editRequestNotes'); clearEl('editRequestOldValue'); clearEl('editRequestNewValue');
     closeEditRequest();
   } catch (err) {
     showToast('Prośba wysłana (tryb demo)', 'info');
@@ -2611,6 +2722,8 @@ async function loadAndRenderStats() {
     const data = await r.json();
     updateStatCards(data);
     renderDonutChart(data);
+    renderHourlyChart(data.callsByHour || []);
+    renderLeadSourcesChart(data.leadSources || {});
 
     // Admin: załaduj statystyki raportów (punkt 9)
     if (currentUser?.role === 'admin') {
@@ -2767,20 +2880,73 @@ function updateStatCards(data) {
   setEl('stat-callback', callbackRate + '%');
   setEl('stat-callback-sub', `${answered} z ${total}`);
 
+  // Reception OS KPI
+  const newPatients = s.newPatients || 0;
+  const firstCalls = s.firstCalls || 0;
+  const fu = s.followUp || {};
+  const avgResp = s.avgResponseTimeMins;
+
+  setEl('stat-new-patients', newPatients);
+  setEl('stat-first-calls-sub', `Pierwszych rozmów: ${firstCalls}`);
+
+  // Czas reakcji z kolorowaniem
+  const respEl = document.getElementById('stat-response-time');
+  if (respEl) {
+    if (avgResp === null || avgResp === undefined) {
+      respEl.textContent = '—';
+      respEl.style.color = '';
+    } else if (avgResp < 5) {
+      respEl.textContent = `${avgResp} min`;
+      respEl.style.color = '#16a34a';
+    } else if (avgResp <= 120) {
+      respEl.textContent = `${avgResp} min`;
+      respEl.style.color = '#d97706';
+    } else {
+      respEl.textContent = `${avgResp} min`;
+      respEl.style.color = '#dc2626';
+    }
+  }
+
+  setEl('stat-followup-done', `${fu.done || 0}/${fu.total || 0}`);
+  setEl('stat-followup-overdue-sub', `Przeterminowane: ${fu.overdue || 0}`);
+
+  // Odwołania = suma z cancellationStats
+  const cancellations = data.cancellationStats || {};
+  const totalCancellations = Object.values(cancellations).reduce((a, b) => a + b, 0);
+  setEl('stat-cancellations', totalCancellations);
+
   // Tabela szczegółowa
   const tbody = document.getElementById('statsTableBody');
   if (tbody) {
+    const respStr = avgResp !== null && avgResp !== undefined ? `${avgResp} min` : '—';
     tbody.innerHTML = `
       <tr><td>Odebrane</td><td>${connected}</td><td>${pct(connected)}</td></tr>
       <tr><td>Nieodebrane</td><td>${missed}</td><td>${pct(missed)}</td></tr>
       <tr><td>Umówione wizyty</td><td>${s.scheduled || 0}</td><td>${pct(s.scheduled || 0)}</td></tr>
-      <tr><td>Follow-up</td><td>${ineffective}</td><td>${pct(ineffective)}</td></tr>
+      <tr><td>Follow-up</td><td>${fu.done || 0}/${fu.total || 0}</td><td>${fu.total > 0 ? Math.round((fu.done||0)/fu.total*100) : 0}%</td></tr>
       <tr><td>Zadania dziś</td><td>${s.tasks || 0}</td><td>—</td></tr>
+      <tr><td>Nowi pacjenci</td><td>${newPatients}</td><td>—</td></tr>
+      <tr><td>Śr. czas reakcji</td><td>${respStr}</td><td>—</td></tr>
     `;
   }
 
   // Czas trwania
   setEl('stat-avg-duration', `${mins}:${String(secs).padStart(2,'0')}`);
+
+  // Powody odwołań
+  const cancList = document.getElementById('cancellationReasonsList');
+  if (cancList) {
+    const entries = Object.entries(cancellations).sort((a, b) => b[1] - a[1]);
+    if (entries.length > 0) {
+      cancList.innerHTML = entries.map(([reason, count]) => `
+        <div class="cancellation-item">
+          <span class="cancellation-reason">${reason}</span>
+          <span class="cancellation-count">${count}</span>
+        </div>`).join('');
+    } else {
+      cancList.innerHTML = '<p class="empty-state">Brak danych o odwołaniach</p>';
+    }
+  }
 }
 
 function renderDonutChart(data) {
@@ -2828,6 +2994,106 @@ function renderDonutChart(data) {
 
   const legendEl = document.getElementById('donutLegend');
   if (legendEl) legendEl.innerHTML = segments.map(d => `<div class="legend-item"><div class="legend-dot" style="background:${d.color}"></div><span>${d.label}</span></div>`).join('');
+}
+
+function renderHourlyChart(callsByHour) {
+  const canvas = document.getElementById('callsByHourChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const pad = { top: 20, right: 20, bottom: 40, left: 40 };
+  const chartW = width - pad.left - pad.right;
+  const chartH = height - pad.top - pad.bottom;
+
+  const data = callsByHour.length === 24 ? callsByHour : Array(24).fill(0);
+  const maxVal = Math.max(...data, 1);
+  const barW = chartW / 24;
+
+  ctx.clearRect(0, 0, width, height);
+
+  // Rysuj słupki
+  data.forEach((val, i) => {
+    const barH = (val / maxVal) * chartH;
+    const x = pad.left + i * barW;
+    const y = pad.top + chartH - barH;
+    const isWorkHour = i >= 8 && i <= 18;
+    ctx.fillStyle = isWorkHour ? '#3b82f6' : '#94a3b8';
+    ctx.fillRect(x + 2, y, barW - 4, barH);
+
+    // Etykiety godzin co 2
+    if (i % 2 === 0) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${i}:00`, x + barW / 2, height - 8);
+    }
+  });
+
+  // Legenda
+  ctx.fillStyle = '#1e293b';
+  ctx.font = '11px Inter';
+  ctx.textAlign = 'left';
+  ctx.fillText('Godziny pracy (8-18)', pad.left, 14);
+}
+
+function renderLeadSourcesChart(leadSources) {
+  const canvas = document.getElementById('leadSourcesChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+  const cx = width / 2, cy = height / 2;
+  const r = Math.min(width, height) / 2 - 20;
+  const inner = r * 0.55;
+
+  const entries = Object.entries(leadSources).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16'];
+
+  if (entries.length === 0 || total === 0) {
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px Inter';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Brak danych', cx, cy);
+    return;
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  let angle = -Math.PI / 2;
+  entries.forEach(([, val], i) => {
+    const slice = (val / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + slice);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    angle += slice;
+  });
+
+  // Wewnętrzny krąg
+  ctx.beginPath();
+  ctx.arc(cx, cy, inner, 0, 2 * Math.PI);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.fillStyle = '#1e293b';
+  ctx.font = 'bold 16px Inter';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total, cx, cy - 8);
+  ctx.font = '11px Inter';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('leadów', cx, cy + 10);
+
+  // Legenda pod wykresem (w kontenerze)
+  const legendEl = document.getElementById('leadSourcesLegend');
+  if (legendEl) {
+    legendEl.innerHTML = entries.slice(0, 5).map(([src, cnt], i) =>
+      `<div class="legend-item"><div class="legend-dot" style="background:${colors[i % colors.length]}"></div><span>${src}: ${cnt}</span></div>`
+    ).join('');
+  }
 }
 
 function renderGaugeChart(data) {

@@ -1411,6 +1411,75 @@ app.get('/api/stats', async (req, res) => {
     const answeredPct = totalCalls > 0 ? Math.round((answered / totalCalls) * 100) : 0;
     const callbackDone = periodCalls.filter(c => c.tag === 'missed' && c.callbackDone).length;
 
+    // Rozkład połączeń wg godzin (do wykresu)
+    const callsByHour = Array(24).fill(0);
+    periodCalls.forEach(c => {
+      const h = new Date(c.timestamp).getHours();
+      callsByHour[h]++;
+    });
+
+    // Źródła leadów (z GHL)
+    const leadSources = {};
+    contacts.forEach(c => {
+      const src = c.source || 'Nieznane';
+      leadSources[src] = (leadSources[src] || 0) + 1;
+    });
+
+    // Statystyki follow-up (z Supabase)
+    let followUpStats = { total: 0, done: 0, overdue: 0, conversionToW0: 0 };
+    let avgResponseTimeMins = null;
+    let newPatientsCount = 0;
+    let firstCallsCount = 0;
+    let cancellationStats = {};
+
+    if (supabase) {
+      try {
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        const now = new Date().toISOString();
+
+        // Follow-up tasks
+        const { data: fuTasks } = await supabase.from('tasks')
+          .select('status, completed_at, due_date')
+          .eq('task_type', 'follow_up_call')
+          .gte('created_at', since);
+        if (fuTasks) {
+          followUpStats.total = fuTasks.length;
+          followUpStats.done = fuTasks.filter(t => t.status === 'completed').length;
+          followUpStats.overdue = fuTasks.filter(t => t.status !== 'completed' && new Date(t.due_date) < new Date()).length;
+        }
+
+        // Czas reakcji (avg)
+        const { data: contactsData } = await supabase.from('contacts')
+          .select('response_time_minutes, is_new_patient')
+          .not('response_time_minutes', 'is', null)
+          .gte('first_call_at', since);
+        if (contactsData && contactsData.length > 0) {
+          const times = contactsData.map(c => c.response_time_minutes).filter(t => t > 0);
+          avgResponseTimeMins = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
+          newPatientsCount = contactsData.filter(c => c.is_new_patient).length;
+        }
+
+        // Pierwsze rozmowy
+        const { data: firstCalls } = await supabase.from('calls')
+          .select('id')
+          .eq('call_type', 'first_call')
+          .gte('created_at', since);
+        firstCallsCount = firstCalls?.length || 0;
+
+        // Powody odwołań
+        const { data: cancellations } = await supabase.from('calls')
+          .select('cancellation_reason')
+          .not('cancellation_reason', 'is', null)
+          .gte('created_at', since);
+        if (cancellations) {
+          cancellations.forEach(c => {
+            const reason = c.cancellation_reason || 'Nieznany';
+            cancellationStats[reason] = (cancellationStats[reason] || 0) + 1;
+          });
+        }
+      } catch(e) { console.warn('[Stats] Supabase error:', e.message); }
+    }
+
     res.json({
       totalContacts: contacts.length,
       totalOpportunities: opps.length,
@@ -1422,13 +1491,21 @@ app.get('/api/stats', async (req, res) => {
         answeredPercent: answeredPct,
         callbackRate: missed > 0 ? Math.round((callbackDone / missed) * 100) : 100,
         uniquePatients: contacts.length,
-        newLeads: opps.filter(o => o.status === 'open').length
+        newLeads: opps.filter(o => o.status === 'open').length,
+        // Reception OS metrics
+        newPatients: newPatientsCount,
+        firstCalls: firstCallsCount,
+        avgResponseTimeMins,
+        followUp: followUpStats
       },
       callsByStatus: {
         connected: periodCalls.filter(c => c.tag === 'connected').length,
         missed,
         ineffective: periodCalls.filter(c => c.tag === 'ineffective').length
       },
+      callsByHour,
+      leadSources,
+      cancellationStats,
       recentCalls: periodCalls.slice(0, 100)
     });
   } catch (err) {
@@ -1486,9 +1563,23 @@ app.get('/api/users', (req, res) => {
   res.json({ users: list });
 });
 
-app.get('/api/user/:id', (req, res) => {
+app.get('/api/user/:id', async (req, res) => {
   const user = USERS[req.params.id];
   if (!user) return res.status(404).json({ error: 'Nie znaleziono użytkownika' });
+  
+  // Rejestruj aktywność (last_login_at)
+  if (supabase) {
+    try {
+      await supabase.from('user_activity').upsert({
+        user_id: user.id,
+        user_name: user.name,
+        last_login_at: new Date().toISOString(),
+        is_active_today: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } catch(e) { console.error('[Activity] Error:', e.message); }
+  }
+  
   res.json(user);
 });
 
@@ -1625,30 +1716,150 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
 
   // Zapisz do Supabase
   if (supabase) {
-    try {
-      const updates = {
-        updated_at: new Date().toISOString()
-      };
-      if (contactType)        updates.contact_type   = contactType;
-      if (callEffect)         updates.call_effect    = callEffect;
-      if (notes !== undefined) updates.notes          = notes;
-      if (program)            updates.treatment      = program;
-      if (outcome)            updates.call_reason    = outcome;
-      if (userId)             updates.user_id        = userId;
-      if (contactId)          updates.ghl_contact_id = contactId;
-      if (contactName)        updates.patient_name   = contactName;
-      if (recordingUrl)       updates.recording_url  = recordingUrl;
+      try {
+        const {
+          cancellationReason,
+          isFollowUp,
+          w0Date,
+          firstCallAt
+        } = req.body;
 
-      const { error } = await supabase.from('calls')
-        .update(updates)
-        .eq('call_id', callId);
-      if (error) console.error('[Report] Supabase error:', error.message);
-    } catch(e) {
-      console.error('[Report] Error:', e.message);
-    }
+        const updates = {
+          updated_at: new Date().toISOString(),
+          report_saved_at: new Date().toISOString(),
+          report_saved_by: userId
+        };
+        if (contactType)        updates.contact_type   = contactType;
+        if (callEffect)         updates.call_effect    = callEffect;
+        if (notes !== undefined) updates.notes          = notes;
+        if (program)            updates.treatment      = program;
+        if (outcome)            updates.call_reason    = outcome;
+        if (userId)             updates.user_id        = userId;
+        if (contactId)          updates.ghl_contact_id = contactId;
+        if (contactName)        updates.patient_name   = contactName;
+        if (recordingUrl)       updates.recording_url  = recordingUrl;
+        
+        // Nowe pola Reception OS
+        if (cancellationReason) updates.cancellation_reason = cancellationReason;
+        if (isFollowUp !== undefined) updates.is_follow_up = isFollowUp;
+        if (w0Date) {
+          updates.w0_date = new Date(w0Date).toISOString();
+          updates.w0_booked_at = new Date().toISOString();
+        }
+        if (firstCallAt) updates.first_call_at = new Date(firstCallAt).toISOString();
+
+        const { error } = await supabase.from('calls').update(updates).eq('call_id', callId);
+        if (error) throw error;
+
+        // Logika Eventów: Odwołanie wizyty
+        if (callEffect === 'visit_cancelled' || outcome === 'odwolanie_wizyty') {
+          await supabase.from('events').insert({
+            event_type: 'visit_cancelled',
+            contact_id: contactId,
+            contact_name: contactName,
+            user_id: userId,
+            description: `Odwołanie wizyty. Powód: ${cancellationReason || 'nie podano'}`,
+            metadata: { callId, cancellationReason }
+          });
+        }
+
+        // Logika Automatycznych Zadań: Follow-up
+        if (isFollowUp || callEffect === 'followup') {
+          const delay = req.body.followUpDelay || '3d';
+          const days = parseInt(delay) || 3;
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + days);
+
+          await supabase.from('tasks').insert({
+            title: `Follow-up: ${contactName || 'Pacjent'}`,
+            description: `Automatyczny follow-up po rozmowie. Notatka: ${notes || ''}`,
+            contact_id: contactId,
+            contact_name: contactName,
+            due_date: dueDate.toISOString(),
+            task_type: 'follow_up_call',
+            follow_up_delay: delay,
+            status: 'open_pool',
+            pool: true,
+            created_by: 'system'
+          });
+
+          await supabase.from('events').insert({
+            event_type: 'follow_up_created',
+            contact_id: contactId,
+            contact_name: contactName,
+            user_id: userId,
+            description: `Utworzono automatyczny follow-up na za ${delay}`
+          });
+        }
+        // Ustaw call_type na podstawie contactType i callEffect
+        let callType = 'other';
+        if (contactType === 'NOWY_PACJENT' && !req.body.isFollowUp) callType = 'first_call';
+        else if (req.body.isFollowUp || callEffect === 'followup') callType = 'follow_up';
+        else if (contactType === 'WIZYTA_BIEZACA') callType = 'visit_related';
+        updates.call_type = callType;
+
+        // Aktualizuj kontakt: is_new_patient + first_call_at + response_time
+        if (contactId && contactType === 'NOWY_PACJENT') {
+          try {
+            const now = new Date().toISOString();
+            // Sprawdz czy kontakt istnieje w Supabase
+            const { data: contactData } = await supabase.from('contacts')
+              .select('is_new_patient, lead_created_at, first_call_at')
+              .eq('ghl_contact_id', contactId)
+              .single();
+
+            if (contactData && !contactData.first_call_at) {
+              // Pierwszy raz dzwonimy do tego pacjenta
+              const leadCreatedAt = contactData.lead_created_at || now;
+              const firstCallAt = now;
+              const responseTimeMs = new Date(firstCallAt) - new Date(leadCreatedAt);
+              const responseTimeMins = Math.round(responseTimeMs / 60000);
+
+              await supabase.from('contacts').update({
+                first_call_at: firstCallAt,
+                response_time_minutes: responseTimeMins,
+                is_new_patient: true,
+                updated_at: now
+              }).eq('ghl_contact_id', contactId);
+
+              // Event: Pierwszy kontakt
+              await supabase.from('events').insert({
+                event_type: 'first_call',
+                contact_id: contactId,
+                contact_name: contactName,
+                user_id: userId,
+                description: `Pierwszy kontakt. Czas reakcji: ${responseTimeMins} min`,
+                metadata: { callId, responseTimeMins }
+              });
+            }
+          } catch(e) { console.warn('[ReceptionOS] Contact update error:', e.message); }
+        }
+
+        // Automatyczny task przy odwołaniu bez nowego terminu
+        if ((callEffect === 'odwolanie' || outcome === 'odwolanie') && !req.body.w0Date) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 3);
+          try {
+            await supabase.from('tasks').insert({
+              title: `Oddzwoń po odwołaniu: ${contactName || 'Pacjent'}`,
+              description: `Odwołanie wizyty. Powód: ${req.body.cancellationReason || 'nie podano'}. Umów nowy termin.`,
+              contact_id: contactId,
+              contact_name: contactName,
+              due_date: dueDate.toISOString(),
+              task_type: 'follow_up_call',
+              follow_up_delay: '3d',
+              status: 'open_pool',
+              pool: true,
+              created_by: 'system'
+            });
+          } catch(e) { console.warn('[ReceptionOS] Auto-task error:', e.message); }
+        }
+
+      } catch (err) {
+        console.error('[Supabase] report update error:', err.message);
+      }
   }
 
-  broadcast({ type: 'CALL_REPORT_SAVED', callId, contactType, callEffect, userId });
   res.json({ success: true });
 });
 
@@ -1876,12 +2087,164 @@ app.get('/api/calls/history', async (req, res) => {
   res.json({ calls: getRecentCalls(days) });
 });
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// ─── EDIT REQUESTS ───────────────────────────────────────────────────────────────────────────────────
+
+// Utwórz prośbę o edycję danych kontaktu
+app.post('/api/contact/:id/request-edit', async (req, res) => {
+  try {
+    const { contactName, notes, fieldName, oldValue, newValue, requestedBy } = req.body;
+    const contactId = req.params.id;
+
+    // 1. Zapisz do Supabase edit_requests
+    if (supabase) {
+      try {
+        await supabase.from('edit_requests').insert({
+          contact_id: contactId,
+          contact_name: contactName,
+          requested_by: requestedBy || 'unknown',
+          field_name: fieldName || 'general',
+          old_value: oldValue || null,
+          new_value: newValue || null,
+          notes: notes || null,
+          status: 'pending'
+        });
+      } catch(e) { console.warn('[EditRequest] Supabase error:', e.message); }
+    }
+
+    // 2. Utwórz zadanie dla Soni w GHL
+    const taskData = {
+      title: `Prośba o edycję: ${contactName || 'Pacjent'}`,
+      body: `Pole: ${fieldName || 'ogólne'}\nStara wartość: ${oldValue || '-'}\nNowa wartość: ${newValue || '-'}\nNotatka: ${notes || ''}`,
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      status: 'incompleted',
+      assignedTo: GHL_SONIA_USER_ID
+    };
+    const response = await axios.post(
+      `https://services.leadconnectorhq.com/contacts/${contactId}/tasks`,
+      taskData,
+      { headers: ghlHeaders, timeout: 10000 }
+    );
+
+    broadcast({ type: 'edit_request_created', contactId, contactName, fieldName });
+    res.json({ success: true, task: response.data });
+  } catch (err) {
+    res.status(500).json({ error: err.message, details: err.response?.data });
+  }
+});
+
+// Pobierz wszystkie prośby o edycję (admin)
+app.get('/api/edit-requests', async (req, res) => {
+  if (!supabase) return res.json({ requests: [] });
+  try {
+    const { data, error } = await supabase.from('edit_requests')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    res.json({ requests: data || [] });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Zatwierdź / odrzuc prośbę o edycję
+app.patch('/api/edit-requests/:id', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Supabase niedostępne' });
+  try {
+    const { status, resolvedBy } = req.body;
+    const { error } = await supabase.from('edit_requests').update({
+      status,
+      resolved_by: resolvedBy,
+      resolved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── STATUS UŻYTKOWNIKÓW (online/offline) ───────────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/users/activity', async (req, res) => {
+  const users = Object.values(USERS);
+  const now = Date.now();
+  const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15 minut
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('user_activity').select('*');
+      if (!error && data) {
+        const activityMap = {};
+        data.forEach(a => { activityMap[a.user_id] = a; });
+
+        const result = users.map(u => {
+          const activity = activityMap[u.id];
+          const lastLogin = activity?.last_login_at ? new Date(activity.last_login_at).getTime() : null;
+          const isOnline = lastLogin ? (now - lastLogin) < ONLINE_THRESHOLD_MS : false;
+          return {
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            isOnline,
+            lastLoginAt: activity?.last_login_at || null,
+            isActiveToday: activity?.is_active_today || false
+          };
+        });
+        return res.json({ users: result });
+      }
+    } catch(e) { console.warn('[UserActivity] Error:', e.message); }
+  }
+
+  // Fallback bez Supabase
+  res.json({ users: users.map(u => ({ id: u.id, name: u.name, role: u.role, isOnline: false, lastLoginAt: null })) });
+});
+
+// Aktualizuj aktywność użytkownika (heartbeat)
+app.post('/api/users/:id/heartbeat', async (req, res) => {
+  const user = USERS[req.params.id];
+  if (!user) return res.status(404).json({ error: 'Nie znaleziono' });
+  if (supabase) {
+    try {
+      await supabase.from('user_activity').upsert({
+        user_id: user.id,
+        user_name: user.name,
+        last_login_at: new Date().toISOString(),
+        is_active_today: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    } catch(e) { /* ignoruj */ }
+  }
+  res.json({ success: true });
+});
+
+// ─── FOLLOW-UP OVERDUE CHECK ───────────────────────────────────────────────────────────────────────────────────
+
+// Co 30 minut sprawdzaj przeterminowane follow-upy i oznaczaj je
+async function checkOverdueFollowUps() {
+  if (!supabase) return;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('tasks')
+      .update({ status: 'overdue', updated_at: now })
+      .eq('task_type', 'follow_up_call')
+      .not('status', 'in', '("completed","overdue")')
+      .lt('due_date', now);
+    if (error) console.warn('[FollowUp] Overdue check error:', error.message);
+    else console.log('[FollowUp] Overdue check complete');
+  } catch(e) { console.warn('[FollowUp] Exception:', e.message); }
+}
+
+// Uruchom co 30 minut
+setInterval(checkOverdueFollowUps, 30 * 60 * 1000);
+
+// ─── Health check ───────────────────────────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: Math.floor(process.uptime()), ts: new Date().toISOString() });
 });
 
-// ─── Fallback SPA ─────────────────────────────────────────────────────────────
+// ─── Fallback SPA ───────────────────────────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
