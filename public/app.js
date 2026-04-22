@@ -144,13 +144,106 @@ function initApp() {
   updateClock();
   setInterval(updateClock, 1000);
   connectWebSocket();
-  loadNewLeads();
-  loadTodayTasks();
+  loadDashboardData(); // Nowa funkcja zbiorcza
   loadContacts();
-  renderCharts(null);
   startPolling();
   initDialer();
   initSoniaChat();
+}
+
+async function loadDashboardData() {
+  try {
+    // Pobierz statystyki i ostatnie połączenia
+    const statsResp = await fetch('/api/stats?days=1');
+    const statsData = await statsResp.json();
+    
+    updateKPIs(statsData);
+    renderStatsCharts(statsData);
+    
+    // Pobierz nowe zgłoszenia
+    loadNewLeads();
+    
+    // Pobierz zadania (nowy system)
+    loadTasks();
+  } catch(e) { console.error('Dashboard load error:', e); }
+}
+
+function updateKPIs(data) {
+  const stats = data.stats || {};
+  if (document.getElementById('kpi-calls')) document.getElementById('kpi-calls').textContent = stats.totalCalls || 0;
+  if (document.getElementById('kpi-new')) document.getElementById('kpi-new').textContent = stats.newLeads || 0;
+  if (document.getElementById('kpi-missed')) document.getElementById('kpi-missed').textContent = stats.missed || 0;
+  
+  const toCallCount = (stats.missed || 0) + (data.callsByStatus?.ineffective || 0);
+  if (document.getElementById('kpi-to-call')) document.getElementById('kpi-to-call').textContent = toCallCount;
+  
+  updateDashboardLists(data.recentCalls || []);
+}
+
+function updateDashboardLists(calls) {
+  const liveFeedEl = document.getElementById('liveFeedList');
+  const callbackEl = document.getElementById('callbackList');
+  if (!liveFeedEl || !callbackEl) return;
+  
+  // ⚡ Live Feed
+  const recent = calls.slice(0, 10);
+  liveFeedEl.innerHTML = recent.length ? recent.map(c => `
+    <div class="live-feed-item">
+      <div class="feed-icon" style="background: ${c.direction === 'inbound' ? '#dbeafe' : '#f1f5f9'}; color: ${c.direction === 'inbound' ? '#3b82f6' : '#64748b'};">
+        ${c.direction === 'inbound' ? '📥' : '📤'}
+      </div>
+      <div class="feed-content">
+        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
+        <div class="feed-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${c.direction === 'inbound' ? 'Przychodzące' : 'Wychodzące'}</div>
+      </div>
+      <div class="status-badge status-${c.tag || 'connected'}">${c.tag === 'missed' ? 'Nieodebrane' : c.tag === 'ineffective' ? 'Bez odbioru' : 'Połączono'}</div>
+    </div>
+  `).join('') : '<div class="empty-state">Oczekiwanie na aktywność...</div>';
+  
+  // 📞 Lista do oddzwonienia
+  const toCall = calls.filter(c => c.tag === 'missed' || c.tag === 'ineffective').slice(0, 10);
+  callbackEl.innerHTML = toCall.length ? toCall.map(c => `
+    <div class="live-feed-item">
+      <div class="feed-icon" style="background: ${c.tag === 'missed' ? '#fee2e2' : '#fef3c7'}; color: ${c.tag === 'missed' ? '#ef4444' : '#d97706'};">
+        ${c.tag === 'missed' ? '🔴' : '🟡'}
+      </div>
+      <div class="feed-content">
+        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
+        <div class="feed-time">${c.tag === 'missed' ? 'Nieodebrane' : 'Nieskuteczne'} • ${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
+      </div>
+      <button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="initiateCall('${c.from}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">Oddzwoń</button>
+    </div>
+  `).join('') : '<div class="empty-state">Brak pacjentów do kontaktu</div>';
+}
+
+let statsDonutChart = null;
+function renderStatsCharts(data) {
+  const stats = data.stats || {};
+  
+  if (document.getElementById('stat-total-calls')) document.getElementById('stat-total-calls').textContent = stats.totalCalls || 0;
+  if (document.getElementById('stat-answered-count')) document.getElementById('stat-answered-count').textContent = stats.answered || 0;
+  if (document.getElementById('stat-missed-count')) document.getElementById('stat-missed-count').textContent = stats.missed || 0;
+  if (document.getElementById('stat-unique-patients')) document.getElementById('stat-unique-patients').textContent = stats.uniquePatients || 0;
+  if (document.getElementById('stat-lost-count')) document.getElementById('stat-lost-count').textContent = stats.ineffective || 0;
+  if (document.getElementById('stat-to-callback')) document.getElementById('stat-to-callback').textContent = (stats.missed || 0) + (stats.ineffective || 0);
+  if (document.getElementById('stat-callback-rate-new')) document.getElementById('stat-callback-rate-new').textContent = (stats.callbackRate || 0) + '%';
+  if (document.getElementById('stat-success-rate')) document.getElementById('stat-success-rate').textContent = (stats.answeredPercent || 0) + '%';
+  
+  const ctx = document.getElementById('statsDonutChart');
+  if (!ctx) return;
+  if (statsDonutChart) statsDonutChart.destroy();
+  statsDonutChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Odebrane', 'Nieodebrane', 'Bez odbioru'],
+      datasets: [{
+        data: [stats.answered || 0, stats.missed || 0, stats.ineffective || 0],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+        borderWidth: 0
+      }]
+    },
+    options: { cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }
+  });
 }
 
 // ==================== CHAT DO SONI ====================
@@ -626,7 +719,6 @@ function renderLeadsList(leads) {
   const listEl = document.getElementById('newLeadsList');
   if (!listEl) return;
 
-  // Filtrowanie po tagach
   const activeFilter = document.querySelector('.source-filter-btn.active')?.dataset?.source || 'all';
   const filtered = activeFilter === 'all' ? leads : leads.filter(l =>
     (l.tags || []).some(t => t.toLowerCase().includes(activeFilter.toLowerCase())) ||
@@ -638,13 +730,22 @@ function renderLeadsList(leads) {
     return;
   }
 
-  // Zbierz unikalne tagi/źródła do filtrów (B4)
   const allSources = [...new Set(leads.flatMap(l => [...(l.tags || []), l.source].filter(Boolean)))];
   renderSourceFilters(allSources);
 
+  // Ustaw kontener na rzędy
+  listEl.style.display = 'flex';
+  listEl.style.flexDirection = 'column';
+  listEl.style.gap = '12px';
+  
   listEl.innerHTML = '';
   filtered.forEach(lead => {
     const card = createLeadCard(lead);
+    // Dostosuj kartę do układu rzędowego
+    card.style.display = 'flex';
+    card.style.alignItems = 'center';
+    card.style.width = '100%';
+    card.style.padding = '12px 20px';
     listEl.appendChild(card);
   });
 }
@@ -705,34 +806,41 @@ function getLeadAgeLabel(createdAt) {
 function createLeadCard(lead) {
   const div = document.createElement('div');
   div.className = 'lead-card';
+  div.style.display = 'flex';
+  div.style.alignItems = 'center';
+  div.style.gap = '20px';
+  div.style.padding = '12px 24px';
 
   const sourceTags = [...new Set([...(lead.tags || []), lead.source].filter(Boolean))];
   const sourceTagsHtml = sourceTags.map(t => getSourceLabel(t)).join('');
   const ageHtml = getLeadAgeLabel(lead.createdAt);
   const stageHtml = lead.stageName
-    ? `<span class="lead-stage-tag">${escHtml(lead.stageName)}</span>`
+    ? `<span class="lead-stage-tag" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(lead.stageName)}</span>`
     : '';
   const phoneHtml = lead.phone
-    ? `<div class="lead-phone">📞 ${lead.phone}</div>`
-    : `<div class="lead-phone no-phone">Brak numeru telefonu</div>`;
+    ? `<div class="lead-phone" style="font-weight:600; color:#3b82f6;">📞 ${lead.phone}</div>`
+    : `<div class="lead-phone no-phone" style="color:#94a3b8;">Brak numeru</div>`;
 
   div.innerHTML = `
-    <div class="lead-avatar">${(lead.name || 'P').charAt(0).toUpperCase()}</div>
-    <div class="lead-info">
-      <div class="lead-name-row">
-        <span class="lead-name">${escHtml(lead.name)}</span>
-        ${stageHtml}
-        ${ageHtml}
-        ${sourceTagsHtml}
-      </div>
-      ${phoneHtml}
-      ${lead.zglosza ? `<div class="lead-zglosza"><em>${escHtml(lead.zglosza)}</em></div>` : ''}
+    <div class="lead-avatar" style="width:40px; height:40px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-weight:700; color:#475569; flex-shrink:0;">
+      ${(lead.name || 'P').charAt(0).toUpperCase()}
     </div>
-    <div class="lead-actions">
-      ${lead.phone ? `<button class="btn-call" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">📞 Zadzwoń</button>` : ''}
-      <button class="btn-report" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">📋 Raport</button>
-      <button class="btn-edit edit-request-btn" onclick="openEditRequest('${lead.contactId}', '${escHtml(lead.name)}')">${currentUserRole === 'admin' ? '✏️ Edytuj' : '✏️ Prośba o edycję'}</button>
-      <button class="btn-delete admin-only" style="display:${currentUserRole === 'admin' ? 'inline-flex' : 'none'}" onclick="deleteLead('${lead.id}', this)">✕</button>
+    <div class="lead-info" style="flex:1; display:flex; align-items:center; gap:24px;">
+      <div style="min-width:180px;">
+        <div class="lead-name" style="font-weight:700; color:#1e293b; font-size:15px;">${escHtml(lead.name)}</div>
+        <div style="display:flex; gap:6px; margin-top:4px;">${stageHtml}${ageHtml}</div>
+      </div>
+      <div style="min-width:140px;">${phoneHtml}</div>
+      <div style="flex:1; font-size:13px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${lead.zglosza ? `<em>${escHtml(lead.zglosza)}</em>` : ''}
+      </div>
+      <div style="display:flex; gap:4px;">${sourceTagsHtml}</div>
+    </div>
+    <div class="lead-actions" style="display:flex; gap:8px; flex-shrink:0;">
+      ${lead.phone ? `<button class="btn-call" style="padding:6px 12px;" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">📞</button>` : ''}
+      <button class="btn-report" style="padding:6px 12px; font-size:12px;" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">📋 Raport</button>
+      <button class="btn-edit edit-request-btn" style="padding:6px 12px; font-size:12px;" onclick="openEditRequest('${lead.contactId}', '${escHtml(lead.name)}')">✏️</button>
+      <button class="btn-delete admin-only" style="display:${currentUserRole === 'admin' ? 'inline-flex' : 'none'}; padding:6px 12px;" onclick="deleteLead('${lead.id}', this)">✕</button>
     </div>
   `;
   return div;
@@ -1260,30 +1368,76 @@ async function handleRegularPatientReport(contactId, data) {
 // ==================== TASKS (F1/F2) ====================
 let completedTaskIds = new Set(JSON.parse(localStorage.getItem('completedTaskIds') || '[]'));
 
-async function loadTodayTasks() {
-  const listEl = document.getElementById('tasksTodayList');
-  if (!listEl) return;
-
+async function loadTasks() {
+  const myTasksEl = document.getElementById('tasksMyList');
+  const allTasksEl = document.getElementById('tasksAllList');
+  const poolTasksEl = document.getElementById('tasksPoolList');
+  
   try {
-    const r = await fetch('/api/tasks');
-    const data = await r.json();
-    const tasks = (data.tasks || data.data || []).filter(t => !completedTaskIds.has(t.id));
+    const userId = currentUser?.id;
+    const [myResp, allResp, poolResp] = await Promise.all([
+      fetch(`/api/tasks?userId=${userId}&filter=mine`),
+      fetch(`/api/tasks?filter=all`),
+      fetch(`/api/tasks?filter=unassigned`)
+    ]);
+    
+    const myTasks = (await myResp.json()).tasks || [];
+    const allTasks = (await allResp.json()).tasks || [];
+    const poolTasks = (await poolResp.json()).tasks || [];
+    
+    if (myTasksEl) renderTasksList(myTasksEl, myTasks, true);
+    if (allTasksEl) renderTasksList(allTasksEl, allTasks, false);
+    if (poolTasksEl) renderTasksList(poolTasksEl, poolTasks, false, true);
+    
+    if (document.getElementById('badge-tasks-my')) document.getElementById('badge-tasks-my').textContent = myTasks.length;
+    if (document.getElementById('badge-tasks-all')) document.getElementById('badge-tasks-all').textContent = allTasks.length;
+    if (document.getElementById('badge-tasks-pool')) document.getElementById('badge-tasks-pool').textContent = poolTasks.length;
+    
+  } catch(e) { console.error('Load tasks error:', e); }
+}
 
-    const today = new Date().toDateString();
-    todayTasks = tasks.filter(t => t.dueDate && new Date(t.dueDate).toDateString() === today);
-
-    renderTodayTasks(listEl, todayTasks);
-    const badge = document.getElementById('kpi-tasks');
-    if (badge) badge.textContent = todayTasks.length;
-    const navBadge = document.getElementById('badge-tasks-nav');
-    if (navBadge) navBadge.textContent = todayTasks.length || '';
-  } catch (err) {
-    todayTasks = [
-      { id: 't1', title: 'Oddzwoń do Anny Kowalskiej', body: 'Pacjentka prosi o kontakt', phone: '+48 501 234 567', dueDate: new Date().toISOString(), completed: false },
-      { id: 't2', title: 'Prośba o edycję: Marek Nowak', body: 'Recepcja prosi o edycję danych', phone: '+48 602 345 678', dueDate: new Date().toISOString(), completed: false }
-    ].filter(t => !completedTaskIds.has(t.id));
-    renderTodayTasks(listEl, todayTasks);
+function renderTasksList(el, tasks, isMyTasks = false, isPool = false) {
+  if (tasks.length === 0) {
+    el.innerHTML = `<div class="empty-state">${isPool ? 'Brak zadań w puli' : 'Brak zadań'}</div>`;
+    return;
   }
+  
+  el.innerHTML = tasks.map(t => `
+    <div class="task-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f1f5f9;">
+      <div>
+        <div style="font-weight: 600; color: #1e293b;">${escHtml(t.title)}</div>
+        <div style="font-size: 12px; color: #64748b;">${t.contactName || 'Pacjent'} • ${new Date(t.dueDate).toLocaleDateString('pl-PL')}</div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        ${isPool ? `<button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="claimTask('${t.id}')">Biorę to</button>` : ''}
+        ${!isPool && t.status !== 'completed' ? `<button class="btn-secondary" style="padding: 4px 12px; font-size: 11px;" onclick="completeTask('${t.id}')">✓</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function claimTask(taskId) {
+  try {
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignedTo: currentUser?.id })
+    });
+    showToast('Zadanie przypisane do Ciebie', 'success');
+    loadTasks();
+  } catch(e) { showToast('Błąd przypisywania zadania', 'error'); }
+}
+
+async function completeTask(taskId) {
+  try {
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' })
+    });
+    showToast('Zadanie wykonane', 'success');
+    loadTasks();
+  } catch(e) { showToast('Błąd aktualizacji zadania', 'error'); }
 }
 
 function renderTodayTasks(listEl, tasks) {

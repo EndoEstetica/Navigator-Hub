@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <!-- EKRAN LOGOWANIA -->
@@ -102,12 +103,32 @@
             <div class="kpi-label">Nowe zgłoszenia</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-value" id="kpi-tasks">—</div>
-            <div class="kpi-label">Zadania na dziś</div>
-          </div>
-          <div class="kpi-card kpi-alert">
             <div class="kpi-value" id="kpi-missed">—</div>
             <div class="kpi-label">Nieodebrane</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value" id="kpi-to-call">—</div>
+            <div class="kpi-label">Do oddzwonienia</div>
+          </div>
+        </div>
+
+        <!-- Dashboard Layout: Live Feed & Callback List -->
+        <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
+          <div class="dashboard-section">
+            <div class="section-header">
+              <h3>⚡ Live Feed — Ostatnia aktywność</h3>
+            </div>
+            <div id="liveFeedList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
+              <div class="empty-state">Oczekiwanie na aktywność...</div>
+            </div>
+          </div>
+          <div class="dashboard-section">
+            <div class="section-header">
+              <h3>📞 Lista do oddzwonienia</h3>
+            </div>
+            <div id="callbackList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
+              <div class="empty-state">Brak pacjentów do kontaktu</div>
+            </div>
           </div>
         </div>
 
@@ -223,36 +244,48 @@
       <!-- WIDOK: ZADANIA -->
       <div id="view-tasks" class="view">
         <div class="view-header">
-          <h1>Zadania</h1>
+          <h1>System Zadań</h1>
           <div class="header-actions">
-            <button class="btn-secondary" onclick="loadAllTasks()">↻ Odśwież</button>
+            <button class="btn-primary" onclick="openCreateTaskModal()">+ Nowe zadanie</button>
+            <button class="btn-secondary" onclick="loadTasks()">↻ Odśwież</button>
           </div>
         </div>
 
         <!-- Filtry zakładkowe -->
         <div class="tabs-container">
           <div class="tabs-header">
-            <button class="tab-btn active" data-tab="tasks-todo" onclick="switchTasksTab('todo')">
-              Do zrobienia
-              <span class="tab-badge" id="badge-tasks-todo">0</span>
+            <button class="tab-btn active" data-tab="tasks-my" onclick="switchTasksTab('my')">
+              Moje zadania
+              <span class="tab-badge" id="badge-tasks-my">0</span>
             </button>
-            <button class="tab-btn" data-tab="tasks-done" onclick="switchTasksTab('done')">
-              Wykonane
-              <span class="tab-badge" id="badge-tasks-done">0</span>
+            <button class="tab-btn" data-tab="tasks-pool" onclick="switchTasksTab('pool')">
+              Pula zadań (Do wzięcia)
+              <span class="tab-badge" id="badge-tasks-pool">0</span>
+            </button>
+            <button class="tab-btn" data-tab="tasks-all" onclick="switchTasksTab('all')">
+              Wszystkie zadania
+              <span class="tab-badge" id="badge-tasks-all">0</span>
             </button>
           </div>
 
-          <!-- Do zrobienia — pogrupowane wg daty -->
-          <div id="tab-tasks-todo" class="tab-content active">
-            <div id="tasksTodoList">
+          <!-- Moje zadania -->
+          <div id="tab-tasks-my" class="tab-content active">
+            <div id="tasksMyList" class="tasks-list">
               <div class="loading-state"><div class="spinner"></div><p>Ładowanie...</p></div>
             </div>
           </div>
 
-          <!-- Wykonane — archiwum -->
-          <div id="tab-tasks-done" class="tab-content">
-            <div id="tasksDoneList">
-              <div class="empty-state">Brak wykonanych zadań</div>
+          <!-- Pula zadań -->
+          <div id="tab-tasks-pool" class="tab-content">
+            <div id="tasksPoolList" class="tasks-list">
+              <div class="empty-state">Brak zadań w puli</div>
+            </div>
+          </div>
+
+          <!-- Wszystkie zadania -->
+          <div id="tab-tasks-all" class="tab-content">
+            <div id="tasksAllList" class="tasks-list">
+              <div class="empty-state">Brak zadań</div>
             </div>
           </div>
         </div>
