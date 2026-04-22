@@ -149,6 +149,26 @@ function initApp() {
   startPolling();
   initDialer();
   initSoniaChat();
+  
+  // Automatycznie pokaż chat Sonia i dialer po zalogowaniu
+  setTimeout(() => {
+    // Pokaż panel czatu Sonia (nie minimalizowany)
+    const soniaPanel = document.getElementById('soniaChatPanel');
+    if (soniaPanel) {
+      soniaPanel.classList.remove('hidden');
+      soniaPanel.classList.remove('minimized');
+      soniaChatOpen = true;
+    }
+    // Pokaż dialer
+    const dialerPanel = document.getElementById('dialerPanel');
+    const dialerIcon = document.getElementById('dialerToggleIcon');
+    if (dialerPanel) {
+      dialerPanel.classList.remove('hidden');
+      dialerPanel.classList.remove('minimized');
+      dialerOpen = true;
+      if (dialerIcon) dialerIcon.textContent = '✕';
+    }
+  }, 300);
 }
 
 async function loadDashboardData() {

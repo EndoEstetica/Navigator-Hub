@@ -120,7 +120,15 @@ async function loadCallsFromSupabase() {
             contactName: row.patient_name,
             contactId: row.ghl_contact_id,
             userId: row.user_id,
-            tag: row.contact_type,
+            tag: row.contact_type || (() => {
+              // Odtwórz tag z status i direction gdy contact_type jest null
+              if (row.status === 'ended' || row.status === 'missed') {
+                if (row.duration_seconds > 0) return 'connected';
+                if (row.direction === 'inbound') return 'missed';
+                if (row.direction === 'outbound') return 'ineffective';
+              }
+              return row.status === 'active' ? 'connected' : null;
+            })(),
             timestamp: row.created_at,
             answeredAt: row.answered_at,
             endedAt: row.ended_at,
