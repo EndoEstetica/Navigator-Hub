@@ -349,18 +349,7 @@ app.patch('/api/contact/:id/custom-fields', async (req, res) => {
   }
 });
 
-// Pobierz zadania dla lokalizacji
-app.get('/api/tasks', async (req, res) => {
-  try {
-    const response = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/tasks?locationId=${GHL_LOCATION_ID}&limit=50`,
-      { headers: ghlHeaders }
-    );
-    res.json(response.data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// UWAGA: /api/tasks jest zdefiniowany niżej (tasksPool) - nie duplikuj tutaj
 
 // Pobierz zadania dla kontaktu
 app.get('/api/contact/:id/tasks', async (req, res) => {

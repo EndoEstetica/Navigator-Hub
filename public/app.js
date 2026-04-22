@@ -2613,7 +2613,7 @@ async function submitCreateTask() {
   
   const taskData = {
     title,
-    body,
+    description: body,
     dueDate: new Date(dueDate).toISOString(),
     assignedTo: assignee === 'pool' ? null : (assignee === 'me' ? currentUser?.id : assignee),
     contactId: currentContact?.id || null,
