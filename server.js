@@ -1266,6 +1266,99 @@ app.get('/api/chat/sonia-inbox', (req, res) => {
   res.json({ conversations });
 });
 
+// ─── ZAPIS RAPORTU DO SUPABASE ──────────────────────────────────────────────────
+app.patch('/api/calls/:callId/report', async (req, res) => {
+  const { callId } = req.params;
+  const {
+    contactType, callEffect, notes, program, outcome,
+    userId, contactId, contactName, recordingUrl
+  } = req.body;
+
+  // Aktualizuj in-memory store
+  const existing = callsStore.find(c => c.callId === callId);
+  if (existing) {
+    if (contactType)   existing.contactType   = contactType;
+    if (callEffect)    existing.callEffect    = callEffect;
+    if (notes)         existing.notes         = notes;
+    if (program)       existing.program       = program;
+    if (outcome)       existing.outcome       = outcome;
+    if (userId)        existing.userId        = userId;
+    if (recordingUrl)  existing.recordingUrl  = recordingUrl;
+  }
+
+  // Zapisz do Supabase
+  if (supabase) {
+    try {
+      const updates = {
+        updated_at: new Date().toISOString()
+      };
+      if (contactType)   updates.contact_type   = contactType;
+      if (callEffect)    updates.call_effect    = callEffect;
+      if (notes)         updates.notes          = notes;
+      if (program)       updates.treatment      = program;
+      if (outcome)       updates.call_reason    = outcome;
+      if (userId)        updates.user_id        = userId;
+      if (contactId)     updates.ghl_contact_id = contactId;
+      if (contactName)   updates.patient_name   = contactName;
+      if (recordingUrl)  updates.recording_url  = recordingUrl;
+
+      const { error } = await supabase.from('calls')
+        .update(updates)
+        .eq('call_id', callId);
+      if (error) console.error('[Report] Supabase error:', error.message);
+    } catch(e) {
+      console.error('[Report] Error:', e.message);
+    }
+  }
+
+  broadcast({ type: 'CALL_REPORT_SAVED', callId, contactType, callEffect });
+  res.json({ success: true });
+});
+
+// Pobierz historię połączeń z Supabase (z raportami i nagraniami)
+app.get('/api/calls/history', async (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('calls')
+        .select('*')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      const calls = (data || []).map(row => ({
+        callId: row.call_id,
+        pbxCallId: row.pbx_call_id,
+        from: row.caller_phone,
+        to: row.called_phone,
+        direction: row.direction,
+        status: row.status,
+        duration: row.duration_seconds,
+        recordingUrl: row.recording_url,
+        contactName: row.patient_name,
+        contactId: row.ghl_contact_id,
+        userId: row.user_id,
+        tag: row.contact_type || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
+        contactType: row.contact_type,
+        callEffect: row.call_effect,
+        notes: row.notes,
+        program: row.treatment,
+        outcome: row.call_reason,
+        timestamp: row.created_at,
+        answeredAt: row.answered_at,
+        endedAt: row.ended_at
+      }));
+      return res.json({ calls });
+    } catch(e) {
+      console.error('[History] Supabase error:', e.message);
+    }
+  }
+  // Fallback
+  res.json({ calls: getRecentCalls(days) });
+});
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: Math.floor(process.uptime()), ts: new Date().toISOString() });

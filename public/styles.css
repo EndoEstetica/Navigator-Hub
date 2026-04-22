@@ -2587,3 +2587,303 @@ body {
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 }
+
+/* ============================================================
+   NAKŁADKA BLOKUJĄCA RAPORT (podczas dzwonienia)
+   ============================================================ */
+
+.popup-report {
+  position: relative;
+}
+
+.report-block-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 20px 20px;
+  transition: opacity 0.3s ease;
+}
+
+.report-block-overlay.hidden {
+  display: none !important;
+}
+
+.report-block-content {
+  text-align: center;
+  color: #64748b;
+}
+
+.report-block-content p {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 16px;
+  color: #475569;
+}
+
+.ringing-animation {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.ring-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: ringBounce 1.2s ease-in-out infinite;
+}
+
+.ring-dot:nth-child(1) { animation-delay: 0s; }
+.ring-dot:nth-child(2) { animation-delay: 0.2s; }
+.ring-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes ringBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ============================================================
+   HISTORIA POŁĄCZEŃ — rozszerzone style
+   ============================================================ */
+
+.call-stage-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stage-new        { background: #dbeafe; color: #1d4ed8; }
+.stage-attempt1   { background: #fef3c7; color: #d97706; }
+.stage-attempt2   { background: #fee2e2; color: #dc2626; }
+.stage-followup   { background: #f3e8ff; color: #7c3aed; }
+.stage-after-call { background: #d1fae5; color: #065f46; }
+.stage-booked     { background: #dcfce7; color: #15803d; }
+.stage-noshow     { background: #fce7f3; color: #9d174d; }
+.stage-refused    { background: #f1f5f9; color: #475569; }
+
+/* ============================================================
+   WIDOK ZADAŃ — kalendarz miesięczny
+   ============================================================ */
+
+.tasks-calendar {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.calendar-header h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.calendar-nav-btn {
+  background: none;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.calendar-nav-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+}
+
+.calendar-day-header {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.calendar-day {
+  min-height: 72px;
+  padding: 6px;
+  border-right: 1px solid #f8fafc;
+  border-bottom: 1px solid #f8fafc;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.calendar-day:hover { background: #f8fafc; }
+
+.calendar-day.today { background: #eff6ff; }
+
+.calendar-day.today .day-num {
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-day.other-month { opacity: 0.35; }
+
+.calendar-day.selected { background: #f0f9ff; }
+
+.day-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.day-task-dot {
+  font-size: 10px;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #e0f2fe;
+  color: #0369a1;
+  line-height: 1.4;
+}
+
+.day-task-dot.overdue { background: #fee2e2; color: #dc2626; }
+
+.day-more {
+  font-size: 10px;
+  color: #94a3b8;
+  padding: 1px 4px;
+}
+
+/* Pool sekcja na kokpicie */
+.pool-section {
+  background: #fff;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.pool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pool-header h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pool-badge {
+  background: #f59e0b;
+  color: #fff;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pool-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pool-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f8fafc;
+  gap: 12px;
+}
+
+.pool-item:last-child { border-bottom: none; }
+
+.pool-item:hover { background: #fafafa; }
+
+.pool-item-info { flex: 1; min-width: 0; }
+
+.pool-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pool-item-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.btn-claim {
+  padding: 5px 12px;
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-claim:hover { background: #d97706; }

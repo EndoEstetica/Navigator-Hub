@@ -172,6 +172,7 @@ function initApp() {
 }
 
 async function loadDashboardData() {
+  loadDashboardPool(); // Załaduj pulę zadań na kokpicie
   try {
     // Pobierz statystyki i ostatnie połączenia
     const statsResp = await fetch('/api/stats?days=1');
@@ -619,6 +620,9 @@ function handleCallAnswered(data) {
   // Ukryj przycisk Odbierz
   const answerBtn = document.getElementById('popupAnswerBtn');
   if (answerBtn) answerBtn.style.display = 'none';
+  // Odblokuj formularz raportu
+  const overlay = document.getElementById('reportBlockOverlay');
+  if (overlay) overlay.classList.add('hidden');
   // Uruchom timer od momentu odebrania
   if (activeCallId === data.callId) startCallTimer();
 }
@@ -1007,6 +1011,9 @@ function renderCallRow(c) {
   const agentHtml = c.userId
     ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(c.userId)}</div>` : '';
 
+  // Etap lejka
+  const stageHtml = getStageTagHtml(c.stageId, c.stageName);
+
   return `
     <tr class="call-row" onclick="openCallReport('${c.callId}')">
       <td>
@@ -1015,7 +1022,7 @@ function renderCallRow(c) {
           <div class="call-name-cell">
             <div class="call-name">${c.contactName || c.from || 'Nieznany'}</div>
             <div class="call-number">${c.from || c.to || ''}</div>
-            ${outcomeHtml}
+            <div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">${stageHtml}${outcomeHtml}</div>
           </div>
         </div>
       </td>
@@ -1043,6 +1050,25 @@ function renderCallRow(c) {
 function tagLabel(tag) {
   const labels = { connected: 'POŁĄCZONO', missed: 'NIEODEBRANE', ineffective: 'NIESKUTECZNE' };
   return labels[tag] || tag.toUpperCase();
+}
+
+// Etap lejka jako tag HTML
+function getStageTagHtml(stageId, stageName) {
+  if (!stageId && !stageName) return '';
+  const name = stageName || GHL_STAGE_NAMES[stageId] || stageId;
+  const stageClass = {
+    'Nowe zgłoszenie': 'stage-new',
+    '1 próba kontaktu': 'stage-attempt1',
+    '2 próba kontaktu': 'stage-attempt2',
+    'Follow-up dzień 2': 'stage-followup',
+    'Follow-up dzień 4': 'stage-followup',
+    'Brak kontaktu': 'stage-refused',
+    'Po rozmowie': 'stage-after-call',
+    'Umówiony W0': 'stage-booked',
+    'No-show': 'stage-noshow',
+    'Odmówił': 'stage-refused'
+  }[name] || 'stage-new';
+  return `<span class="call-stage-tag ${stageClass}">${escHtml(name)}</span>`;
 }
 
 function formatDuration(sec) {
@@ -1159,6 +1185,19 @@ function openCallPopup(contact) {
 
   resetReportForm();
   document.getElementById('callPopup').classList.remove('hidden');
+
+  // Pokaż nakładkę blokującą raport podczas dzwonienia
+  const overlay = document.getElementById('reportBlockOverlay');
+  if (overlay) {
+    if (contact.direction === 'outbound') {
+      // Wychodzące — raport od razu dostępny
+      overlay.classList.add('hidden');
+    } else {
+      // Przychodzące — czekamy na odebranie
+      overlay.classList.remove('hidden');
+    }
+  }
+
   // Timer startuje dopiero po odebraniu połączenia (CALL_ANSWERED)
   // Dla połączeń wychodzących (click-to-call) timer startuje od razu
   if (contact.direction === 'outbound') {
@@ -1315,6 +1354,28 @@ async function saveReport() {
     else if (selectedStatus === 'WIZYTA_BIEZACA') await handleVisitReport(contactId, reportData);
     else if (selectedStatus === 'STALY_PACJENT')  await handleRegularPatientReport(contactId, reportData);
     else if (selectedStatus === 'SPAM')           showToast('Kontakt oznaczony jako SPAM', 'info');
+
+    // Zapisz raport do Supabase przez /api/calls/:callId/report
+    if (activeCallId) {
+      const notes = reportData.notatka || reportData.powodRezygnacji || reportData.powodOdwolania || reportData.powodZmiany || '';
+      const callEffect = reportData.outcome || selectedOutcome || '';
+      try {
+        await fetch(`/api/calls/${activeCallId}/report`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactType: selectedStatus,
+            callEffect,
+            notes,
+            program: reportData.program || '',
+            outcome: selectedOutcome || '',
+            userId: currentUser?.id || '',
+            contactId: contactId || '',
+            contactName: currentContact?.name || ''
+          })
+        });
+      } catch(e) { console.warn('[Report] Save error:', e.message); }
+    }
 
     if (currentContact) {
       inProgressCalls.push({
@@ -1475,11 +1536,20 @@ async function loadTodayTasks() {
   }
 }
 
+// Cache wszystkich moich zadań (do kalendarza)
+let allMyTasksCache = [];
+
 async function loadTasks() {
   const myTasksEl = document.getElementById('tasksMyList');
   const allTasksEl = document.getElementById('tasksAllList');
   const poolTasksEl = document.getElementById('tasksPoolList');
-  
+
+  // Ustaw dziś w nagłówku
+  const todayLabel = document.getElementById('tasksTodayDateLabel');
+  if (todayLabel) {
+    todayLabel.textContent = new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
   try {
     const userId = currentUser?.id;
     const [myResp, allResp, poolResp] = await Promise.all([
@@ -1487,20 +1557,112 @@ async function loadTasks() {
       fetch(`/api/tasks?filter=all`),
       fetch(`/api/tasks?filter=unassigned`)
     ]);
-    
+
     const myTasks = (await myResp.json()).tasks || [];
     const allTasks = (await allResp.json()).tasks || [];
     const poolTasks = (await poolResp.json()).tasks || [];
-    
-    if (myTasksEl) renderTasksList(myTasksEl, myTasks, true);
+
+    allMyTasksCache = myTasks;
+
+    // Filtruj zadania na dziś do listy dziennej
+    const today = new Date().toDateString();
+    const todayTasks = myTasks.filter(t => t.dueDate && new Date(t.dueDate).toDateString() === today);
+    const futureTasks = myTasks.filter(t => t.dueDate && new Date(t.dueDate).toDateString() !== today);
+
+    if (myTasksEl) renderTodayTasks(myTasksEl, todayTasks.length > 0 ? todayTasks : myTasks.slice(0, 5));
     if (allTasksEl) renderTasksList(allTasksEl, allTasks, false);
     if (poolTasksEl) renderTasksList(poolTasksEl, poolTasks, false, true);
-    
+
     if (document.getElementById('badge-tasks-my')) document.getElementById('badge-tasks-my').textContent = myTasks.length;
     if (document.getElementById('badge-tasks-all')) document.getElementById('badge-tasks-all').textContent = allTasks.length;
     if (document.getElementById('badge-tasks-pool')) document.getElementById('badge-tasks-pool').textContent = poolTasks.length;
-    
+
+    // Renderuj kalendarz miesięczny
+    renderCalendar(myTasks);
+
   } catch(e) { console.error('Load tasks error:', e); }
+}
+
+// ==================== KALENDARZ MIESIĘCZNY ====================
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth();
+
+function calendarPrev() {
+  calendarMonth--;
+  if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+  renderCalendar(allMyTasksCache);
+}
+
+function calendarNext() {
+  calendarMonth++;
+  if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+  renderCalendar(allMyTasksCache);
+}
+
+function renderCalendar(tasks) {
+  const grid = document.getElementById('calendarGrid');
+  const label = document.getElementById('calendarMonthLabel');
+  if (!grid) return;
+
+  const monthNames = ['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec',
+    'Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+  if (label) label.textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
+
+  const dayNames = ['Pn','Wt','Śr','Cz','Pt','So','Nd'];
+  const today = new Date();
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+
+  // Mapuj zadania na daty
+  const tasksByDate = {};
+  (tasks || []).forEach(t => {
+    if (!t.dueDate) return;
+    const d = new Date(t.dueDate);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!tasksByDate[key]) tasksByDate[key] = [];
+    tasksByDate[key].push(t);
+  });
+
+  // Nagłówki dni
+  let html = dayNames.map(d => `<div class="calendar-day-header">${d}</div>`).join('');
+
+  // Puste komórki przed pierwszym dniem (Pn=0, Wt=1...)
+  let startDow = firstDay.getDay(); // 0=Nd
+  startDow = startDow === 0 ? 6 : startDow - 1; // Konwertuj na Pn=0
+  for (let i = 0; i < startDow; i++) html += '<div class="calendar-day other-month"></div>';
+
+  // Dni miesiąca
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const isToday = today.getFullYear() === calendarYear && today.getMonth() === calendarMonth && today.getDate() === day;
+    const key = `${calendarYear}-${calendarMonth}-${day}`;
+    const dayTasks = tasksByDate[key] || [];
+    const tasksHtml = dayTasks.slice(0, 2).map(t => {
+      const isOverdue = new Date(t.dueDate) < today && !isToday;
+      return `<div class="day-task-dot${isOverdue ? ' overdue' : ''}" title="${escHtml(t.title)}">${escHtml(t.title.substring(0, 12))}${t.title.length > 12 ? '...' : ''}</div>`;
+    }).join('');
+    const moreHtml = dayTasks.length > 2 ? `<div class="day-more">+${dayTasks.length - 2} więcej</div>` : '';
+
+    html += `
+      <div class="calendar-day${isToday ? ' today' : ''}" onclick="calendarDayClick(${day})">
+        <div class="day-num">${day}</div>
+        <div class="day-tasks">${tasksHtml}${moreHtml}</div>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+function calendarDayClick(day) {
+  const date = new Date(calendarYear, calendarMonth, day);
+  const dateStr = date.toDateString();
+  const dayTasks = allMyTasksCache.filter(t => t.dueDate && new Date(t.dueDate).toDateString() === dateStr);
+  const myListEl = document.getElementById('tasksMyList');
+  if (myListEl && dayTasks.length > 0) {
+    const label = document.getElementById('tasksTodayDateLabel');
+    if (label) label.textContent = date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+    renderTodayTasks(myListEl, dayTasks);
+  }
 }
 
 function renderTasksList(el, tasks, isMyTasks = false, isPool = false) {
@@ -1751,6 +1913,61 @@ function switchTasksTab(tab) {
 }
 
 
+// ==================== PULA ZADAŃ NA KOKPICIE ====================
+async function loadDashboardPool() {
+  const listEl = document.getElementById('dashboardPoolList');
+  const badge = document.getElementById('dashboardPoolBadge');
+  if (!listEl) return;
+
+  try {
+    const r = await fetch('/api/tasks?filter=unassigned');
+    const data = await r.json();
+    const poolTasks = (data.tasks || []).filter(t => t.status !== 'completed');
+
+    if (badge) badge.textContent = poolTasks.length;
+
+    if (poolTasks.length === 0) {
+      listEl.innerHTML = '<div class="empty-state" style="padding:16px;">Brak zadań w puli</div>';
+      return;
+    }
+
+    listEl.innerHTML = poolTasks.map(t => `
+      <div class="pool-item">
+        <div class="pool-item-info">
+          <div class="pool-item-title">${escHtml(t.title)}</div>
+          <div class="pool-item-meta">
+            ${t.contactName ? escHtml(t.contactName) + ' • ' : ''}
+            ${t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Bez terminu'}
+          </div>
+        </div>
+        <button class="btn-claim" onclick="claimPoolTask('${t.id}', this)">✅ Biorę to</button>
+      </div>
+    `).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:16px;">Błąd ładowania</div>';
+  }
+}
+
+async function claimPoolTask(taskId, btn) {
+  if (!currentUser?.id) { showToast('Zaloguj się aby przyjąć zadanie', 'error'); return; }
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignedTo: currentUser.id })
+    });
+    showToast('✅ Zadanie przypisane do Ciebie', 'success');
+    loadDashboardPool();
+    loadTodayTasks();
+  } catch(e) {
+    showToast('Błąd przypisywania', 'error');
+    btn.disabled = false;
+    btn.textContent = '✅ Biorę to';
+  }
+}
+
 // ==================== CONTACTS — BLOK E ====================
 async function loadContacts() {
   const listEl = document.getElementById('contactsList');
@@ -1803,6 +2020,7 @@ function renderContactRow(c) {
   const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Nieznany';
   const tagsHtml = (c.tags || []).map(t => `<span class="contact-tag">${t}</span>`).join('');
   const editBtnLabel = currentUserRole === 'admin' ? '✏️ Edytuj' : '✏️ Prośba o edycję';
+  const stageHtml = (c.stageId || c.stageName) ? getStageTagHtml(c.stageId, c.stageName) : '';
 
   return `
     <div class="contacts-grid-row">
@@ -1816,7 +2034,7 @@ function renderContactRow(c) {
       <div class="contact-email-cell" onclick="editContactField('${c.id}', 'email', '${c.email || ''}', this)" title="Kliknij aby edytować">
         ${c.email || '<span class="no-data">Brak</span>'}
       </div>
-      <div class="contact-tags-cell">${tagsHtml}</div>
+      <div class="contact-tags-cell">${stageHtml}${tagsHtml}</div>
       <div class="contact-actions-cell">
         ${c.phone ? `<button class="btn-call btn-sm" onclick="initiateCall('${c.phone}', '${escHtml(name)}', '${c.id}')">📞</button>` : ''}
         <button class="btn-edit btn-sm edit-request-btn" onclick="openEditRequest('${c.id}', '${escHtml(name)}')">${editBtnLabel}</button>
@@ -2659,7 +2877,7 @@ function playRecording(url) {
   showToast('🎧 Odtwarzanie nagrania...', 'info');
 }
 
-// Aktualizacja loadCalls aby używał nowego systemu
+// Aktualizacja loadCalls — używa /api/calls/history (z Supabase, z raportami i nagraniami)
 async function loadCalls() {
   const feedEl = document.getElementById('callsFeed');
   if (!feedEl) return;
@@ -2667,12 +2885,10 @@ async function loadCalls() {
   feedEl.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Ładowanie połączeń...</p></div>';
 
   try {
-    const response = await fetch('/api/calls');
+    const response = await fetch('/api/calls/history?days=30');
     const data = await response.json();
     allCalls = data.calls || [];
-    
-    const grouped = groupCallsByDay(allCalls);
-    renderCallsTableGrouped(feedEl, grouped);
+    renderCallsTable(allCalls);
   } catch (err) {
     console.error('Load calls error:', err);
     feedEl.innerHTML = '<div class="error-state">Błąd ładowania połączeń</div>';

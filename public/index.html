@@ -161,10 +161,21 @@
               </div>
             </div>
 
+            <!-- Pula zadań na kokpicie -->
+            <div class="pool-section" id="dashboardPoolSection" style="margin-bottom:20px;">
+              <div class="pool-header">
+                <h3>&#128197; Pula zadań do wzięcia <span class="pool-badge" id="dashboardPoolBadge">0</span></h3>
+                <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="loadDashboardPool()">&#8635;</button>
+              </div>
+              <div class="pool-list" id="dashboardPoolList">
+                <div class="empty-state" style="padding:16px;">Brak zadań w puli</div>
+              </div>
+            </div>
+
             <!-- Filtry źródła (B4) -->
             <div class="section-header">
               <h3>Nowe zgłoszenia z GHL</h3>
-              <button class="btn-secondary" onclick="loadNewLeads()">↻ Odśwież</button>
+              <button class="btn-secondary" onclick="loadNewLeads()">&#8635; Odśwież</button>
             </div>
             <div id="sourceFilters" class="source-filters">
               <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')">Wszystkie</button>
@@ -267,10 +278,29 @@
             </button>
           </div>
 
-          <!-- Moje zadania -->
+          <!-- Moje zadania: lista dzienna + kalendarz miesięczny -->
           <div id="tab-tasks-my" class="tab-content active">
-            <div id="tasksMyList" class="tasks-list">
-              <div class="loading-state"><div class="spinner"></div><p>Ładowanie...</p></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+              <!-- Lewa: zadania na dziś -->
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
+                  Dziś — <span id="tasksTodayDateLabel"></span>
+                </div>
+                <div id="tasksMyList" class="tasks-list">
+                  <div class="loading-state"><div class="spinner"></div><p>Ładowanie...</p></div>
+                </div>
+              </div>
+              <!-- Prawa: kalendarz miesięczny -->
+              <div class="tasks-calendar" id="tasksCalendar">
+                <div class="calendar-header">
+                  <button class="calendar-nav-btn" onclick="calendarPrev()">&#8249;</button>
+                  <h3 id="calendarMonthLabel">Kwiecień 2026</h3>
+                  <button class="calendar-nav-btn" onclick="calendarNext()">&#8250;</button>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                  <!-- Wypełniane przez JS -->
+                </div>
+              </div>
             </div>
           </div>
 
@@ -438,6 +468,17 @@
 
       <!-- Formularz raportu -->
       <div class="popup-report">
+        <!-- Nakładka blokująca raport podczas dzwonienia -->
+        <div id="reportBlockOverlay" class="report-block-overlay">
+          <div class="report-block-content">
+            <div class="ringing-animation">
+              <span class="ring-dot"></span>
+              <span class="ring-dot"></span>
+              <span class="ring-dot"></span>
+            </div>
+            <p>Raport dostępny po odebraniu połączenia</p>
+          </div>
+        </div>
         <h3>Raport z rozmowy</h3>
 
         <!-- Wybór statusu — 2x2 kafelki (C7) -->
