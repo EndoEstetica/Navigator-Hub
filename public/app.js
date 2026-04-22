@@ -616,6 +616,11 @@ function handleCallAnswered(data) {
   // Zaktualizuj tag w popupie
   const tagEl = document.getElementById('popupCallTag');
   if (tagEl) { tagEl.textContent = 'POŁĄCZONO'; tagEl.className = 'call-tag tag-connected'; tagEl.style.display = 'inline-block'; }
+  // Ukryj przycisk Odbierz
+  const answerBtn = document.getElementById('popupAnswerBtn');
+  if (answerBtn) answerBtn.style.display = 'none';
+  // Uruchom timer od momentu odebrania
+  if (activeCallId === data.callId) startCallTimer();
 }
 
 function handleCallEnded(data) {
@@ -875,8 +880,10 @@ function createLeadCard(lead) {
         <div style="display:flex; gap:6px; margin-top:4px;">${stageHtml}${ageHtml}</div>
       </div>
       <div style="min-width:140px;">${phoneHtml}</div>
-      <div style="flex:1; font-size:13px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-        ${lead.zglosza ? `<em>${escHtml(lead.zglosza)}</em>` : ''}
+      <div style="flex:1; min-width:0;">
+        ${lead.zglosza
+          ? `<div style="font-size:13px; color:#1e293b; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; padding:4px 10px; background:#f0f9ff; border-left:3px solid #3b82f6; border-radius:0 6px 6px 0;" title="${escHtml(lead.zglosza)}">"​${escHtml(lead.zglosza)}"</div>`
+          : '<div style="font-size:12px;color:#cbd5e1;">Brak opisu</div>'}
       </div>
       <div style="display:flex; gap:4px;">${sourceTagsHtml}</div>
     </div>
@@ -970,13 +977,23 @@ function renderCallsTable(calls) {
 }
 
 function renderCallRow(c) {
-  const time = c.timestamp ? new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
+  const ts = c.timestamp ? new Date(c.timestamp) : null;
+  const date = ts ? ts.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' }) : '';
+  const time = ts ? ts.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
   const dur = c.duration ? formatDuration(c.duration) : '—';
   const dirIcon = c.direction === 'outbound' ? '📤' : '📞';
   const dirLabel = c.direction === 'outbound' ? 'Wychodzące' : 'Przychodzące';
 
   // Tag (C3)
-  const tagHtml = c.tag ? `<span class="call-tag tag-${c.tag}">${tagLabel(c.tag)}</span>` : '';
+  const tagHtml = c.tag ? `<span class="call-tag tag-${c.tag}">${tagLabel(c.tag)}</span>` : '<span style="color:#94a3b8;font-size:11px;">—</span>';
+
+  // Wynik rozmowy (z raportu)
+  const outcomeHtml = c.callEffect
+    ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${escHtml(c.callEffect)}</div>` : '';
+
+  // Notatka z raportu
+  const noteHtml = c.notes
+    ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(c.notes)}">${escHtml(c.notes)}</div>` : '';
 
   // Nagranie (D1)
   const recHtml = c.recordingUrl
@@ -986,22 +1003,38 @@ function renderCallRow(c) {
       ? `<span data-rec-callid="${escHtml(c.callId)}" class="btn-rec-pending" title="Nagranie pojawi się po zakończeniu przetwarzania">⏳ Oczekuje...</span>`
       : `<button class="btn-fetch-rec" onclick="fetchRecording('${c.callId}', this)" title="Sprawdź nagranie">▶ Sprawdź</button>`;
 
+  // Kto obsługiwał
+  const agentHtml = c.userId
+    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(c.userId)}</div>` : '';
+
   return `
     <tr class="call-row" onclick="openCallReport('${c.callId}')">
       <td>
-        <div class="call-avatar ${c.direction === 'outbound' ? 'av-out' : 'av-in'}">${(c.contactName || c.from || '?').charAt(0).toUpperCase()}</div>
-        <div class="call-name-cell">
-          <div class="call-name">${c.contactName || c.from || 'Nieznany'}</div>
-          <div class="call-number">${c.from || c.to || ''}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="call-avatar ${c.direction === 'outbound' ? 'av-out' : 'av-in'}">${(c.contactName || c.from || '?').charAt(0).toUpperCase()}</div>
+          <div class="call-name-cell">
+            <div class="call-name">${c.contactName || c.from || 'Nieznany'}</div>
+            <div class="call-number">${c.from || c.to || ''}</div>
+            ${outcomeHtml}
+          </div>
         </div>
       </td>
-      <td>${dirIcon} ${dirLabel}</td>
+      <td><span style="font-size:13px;">${dirIcon}</span> <span style="font-size:12px;color:#64748b;">${dirLabel}</span></td>
       <td>${tagHtml}</td>
-      <td>${time}</td>
-      <td>${dur}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;color:#1e293b;">${time}</div>
+        <div style="font-size:11px;color:#94a3b8;">${date}</div>
+      </td>
+      <td>
+        <div style="font-size:13px;font-weight:600;color:#1e293b;">${dur}</div>
+        ${agentHtml}
+      </td>
       <td onclick="event.stopPropagation()">${recHtml}</td>
       <td onclick="event.stopPropagation()">
-        ${(c.from || c.to) ? `<button class="btn-call btn-sm" onclick="initiateCall('${c.from || c.to}', '${escHtml(c.contactName || '')}')">📞</button>` : ''}
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${(c.from || c.to) ? `<button class="btn-call btn-sm" onclick="initiateCall('${c.from || c.to}', '${escHtml(c.contactName || '')}')">📞 Oddzwoń</button>` : ''}
+          ${noteHtml}
+        </div>
       </td>
     </tr>
   `;
@@ -1126,7 +1159,16 @@ function openCallPopup(contact) {
 
   resetReportForm();
   document.getElementById('callPopup').classList.remove('hidden');
-  startCallTimer();
+  // Timer startuje dopiero po odebraniu połączenia (CALL_ANSWERED)
+  // Dla połączeń wychodzących (click-to-call) timer startuje od razu
+  if (contact.direction === 'outbound') {
+    startCallTimer();
+  } else {
+    // Dla przychodzących - reset timera, czekamy na CALL_ANSWERED
+    stopCallTimer();
+    const timerEl = document.getElementById('callTimer');
+    if (timerEl) timerEl.textContent = '00:00';
+  }
 }
 
 function openCallPopupForLead(id, name, phone, zglosza, oppId) {
