@@ -1000,19 +1000,10 @@ function renderLeadsList(leads) {
   const allSources = [...new Set(leads.flatMap(l => [...(l.tags || []), l.source].filter(Boolean)))];
   renderSourceFilters(allSources);
 
-  // Ustaw kontener na rzędy
-  listEl.style.display = 'flex';
-  listEl.style.flexDirection = 'column';
-  listEl.style.gap = '12px';
   
   listEl.innerHTML = '';
   filtered.forEach(lead => {
     const card = createLeadCard(lead);
-    // Dostosuj kartę do układu rzędowego
-    card.style.display = 'flex';
-    card.style.alignItems = 'center';
-    card.style.width = '100%';
-    card.style.padding = '12px 20px';
     listEl.appendChild(card);
   });
 }
@@ -1072,44 +1063,66 @@ function getLeadAgeLabel(createdAt) {
 
 function createLeadCard(lead) {
   const div = document.createElement('div');
-  div.className = 'lead-card';
-  div.style.display = 'flex';
-  div.style.alignItems = 'center';
-  div.style.gap = '20px';
-  div.style.padding = '12px 24px';
+  div.className = 'lead-card-v2';
 
   const sourceTags = [...new Set([...(lead.tags || []), lead.source].filter(Boolean))];
   const sourceTagsHtml = sourceTags.map(t => getSourceLabel(t)).join('');
   const ageHtml = getLeadAgeLabel(lead.createdAt);
-  const stageHtml = lead.stageName
-    ? `<span class="lead-stage-tag" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(lead.stageName)}</span>`
+  const isAdmin = currentUserRole === 'admin';
+
+  // Awatar — inicjały z kolorem zależnym od źródła
+  const initials = (lead.name || 'P').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const avatarColors = [
+    ['#dbeafe','#1d4ed8'], ['#dcfce7','#15803d'], ['#fce7f3','#be185d'],
+    ['#fef3c7','#92400e'], ['#ede9fe','#6d28d9'], ['#ffedd5','#c2410c']
+  ];
+  const colorIdx = (lead.name || 'P').charCodeAt(0) % avatarColors.length;
+  const [bgColor, textColor] = avatarColors[colorIdx];
+
+  // Numer telefonu
+  const phoneDisplay = lead.phone
+    ? `<span class="lc-phone">&#128222; ${escHtml(lead.phone)}</span>`
+    : `<span class="lc-phone lc-no-phone">Brak numeru</span>`;
+
+  // ID
+  const idDisplay = lead.id ? `<span class="lc-id">ID: #${String(lead.id).slice(-4)}</span>` : '';
+
+  // Problem pacjenta
+  const problemHtml = lead.zglosza
+    ? `<div class="lc-problem"><span class="lc-problem-label">PROBLEM PACJENTA</span><div class="lc-problem-text">${escHtml(lead.zglosza)}</div></div>`
     : '';
-  const phoneHtml = lead.phone
-    ? `<div class="lead-phone" style="font-weight:600; color:#3b82f6;">📞 ${lead.phone}</div>`
-    : `<div class="lead-phone no-phone" style="color:#94a3b8;">Brak numeru</div>`;
+
+  // Przyciski — Zadzwoń dla wszystkich, Raport i Usuń tylko dla admina
+  const callBtn = lead.phone
+    ? `<button class="lc-btn-call" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">&#128222; Zadzwoń</button>`
+    : '';
+  const reportBtn = isAdmin
+    ? `<button class="lc-btn-report" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">&#128203; Raport</button>`
+    : '';
+  const deleteBtn = isAdmin
+    ? `<button class="lc-btn-delete" onclick="deleteLead('${lead.id}', this)">&#10005; Usuń</button>`
+    : '';
 
   div.innerHTML = `
-    <div class="lead-avatar" style="width:40px; height:40px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-weight:700; color:#475569; flex-shrink:0;">
-      ${(lead.name || 'P').charAt(0).toUpperCase()}
-    </div>
-    <div class="lead-info" style="flex:1; display:flex; align-items:center; gap:24px;">
-      <div style="min-width:180px;">
-        <div class="lead-name" style="font-weight:700; color:#1e293b; font-size:15px;">${escHtml(lead.name)}</div>
-        <div style="display:flex; gap:6px; margin-top:4px;">${stageHtml}${ageHtml}</div>
+    <div class="lc-header">
+      <div class="lc-avatar" style="background:${bgColor}; color:${textColor};">${initials}</div>
+      <div class="lc-name-row">
+        <span class="lc-name">${escHtml(lead.name || 'Nieznany')}</span>
+        ${sourceTagsHtml}
       </div>
-      <div style="min-width:140px;">${phoneHtml}</div>
-      <div style="flex:1; min-width:0;">
-        ${lead.zglosza
-          ? `<div style="font-size:13px; color:#1e293b; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; padding:4px 10px; background:#f0f9ff; border-left:3px solid #3b82f6; border-radius:0 6px 6px 0;" title="${escHtml(lead.zglosza)}">"​${escHtml(lead.zglosza)}"</div>`
-          : '<div style="font-size:12px;color:#cbd5e1;">Brak opisu</div>'}
-      </div>
-      <div style="display:flex; gap:4px;">${sourceTagsHtml}</div>
+      <div class="lc-age">${ageHtml}</div>
     </div>
-    <div class="lead-actions" style="display:flex; gap:8px; flex-shrink:0;">
-      ${lead.phone ? `<button class="btn-call" style="padding:6px 12px;" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">📞</button>` : ''}
-      <button class="btn-report" style="padding:6px 12px; font-size:12px;" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">📋 Raport</button>
-      <button class="btn-edit edit-request-btn" style="padding:6px 12px; font-size:12px;" onclick="openEditRequest('${lead.contactId}', '${escHtml(lead.name)}')">✏️</button>
-      <button class="btn-delete admin-only" style="display:${currentUserRole === 'admin' ? 'inline-flex' : 'none'}; padding:6px 12px;" onclick="deleteLead('${lead.id}', this)">✕</button>
+    ${problemHtml}
+    <div class="lc-footer">
+      <div class="lc-meta">
+        ${phoneDisplay}
+        ${idDisplay}
+      </div>
+      <div class="lc-actions">
+        ${reportBtn}
+        ${deleteBtn}
+        ${callBtn}
+      </div>
     </div>
   `;
   return div;
