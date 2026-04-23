@@ -48,41 +48,6 @@ const ghlHeaders = {
   'Version': '2021-07-28'
 };
 
-// ─── SYSTEM UŻYTKOWNIKÓW (przeniesione wyżej — przed użyciem w handlerach) ───
-const USERS = {
-  kasia:      { id: 'kasia',      name: 'Kasia',      role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
-  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',  role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
-  asia:       { id: 'asia',       name: 'Asia',        role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
-  agata_r:    { id: 'agata_r',    name: 'Agata',       role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
-  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',  role: 'reception', ext: '103', ghlUserId: null },
-  bartosz:    { id: 'bartosz',    name: 'Bartosz',     role: 'admin',     ext: null,  ghlUserId: null },
-  sandra:     { id: 'sandra',     name: 'Sandra',      role: 'admin',     ext: null,  ghlUserId: null },
-  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',   role: 'admin',     ext: null,  ghlUserId: null },
-  patrycja:   { id: 'patrycja',   name: 'Patrycja',    role: 'admin',     ext: null,  ghlUserId: null },
-  sonia:      { id: 'sonia',      name: 'Sonia',       role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
-};
-
-// ─── STAGE IDs LEJKA GHL ──────────────────────────────────────────────────────
-const GHL_STAGES = {
-  '4d006021-f3b2-4efc-8efc-4f049522379c': 'Nowe zgłoszenie',
-  '002dbc5a-c6a4-4931-a9a3-af4877b2c525': '1 próba kontaktu',
-  'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8': '2 próba kontaktu',
-  '6d0c5ca9-8b79-4bf3-a091-381e636cd21e': 'Follow-up dzień 2',
-  '53ad4911-a26c-41fa-9b23-bc3c88f98ea4': 'Follow-up dzień 4',
-  '6517c39e-15fe-4041-a847-89ba822b3c96': 'Brak kontaktu',
-  '19126f1b-5529-48fc-be95-d6b64e264e59': 'Po rozmowie',
-  '73f6704f-1d6a-49dc-8591-4b129ba1b692': 'Umówiony W0',
-  'afc5a678-b78b-47bd-858e-78968724ac4d': 'No-show',
-  '139cde76-d37e-4a14-ad45-ae94a843d78b': 'Odmówił',
-};
-const STAGE_NEW           = '4d006021-f3b2-4efc-8efc-4f049522379c';
-const STAGE_ATTEMPT_1     = '002dbc5a-c6a4-4931-a9a3-af4877b2c525';
-const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
-const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
-const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
-
 // ─── In-memory store połączeń (I4: /api/calls) ───────────────────────────────
 // Przechowuje połączenia z ostatnich 7 dni (max 500 rekordów)
 const callsStore = [];
@@ -245,31 +210,49 @@ function verifyZadarmaWebhookSign(params, signature) {
 async function fetchRecordingFromZadarma(pbxCallId) {
   if (!ZADARMA_KEY || !ZADARMA_SECRET) return null;
   
-  // Endpointy Zadarma do pobierania nagrań
-  const endpoints = ['/v1/pbx/record/request/', '/v1/pbx/record/download/'];
+  // Zadarma API: GET /v1/pbx/record/request/
+  // Parametr: pbx_call_id (permanent ID zewnętrznego połączenia)
+  // Odpowiedź: { status: "success", link: "...", links: [...], lifetime_till: "..." }
+  const endpoint = '/v1/pbx/record/request/';
   
-  for (const endpoint of endpoints) {
+  // Próbuj z pbx_call_id (główny parametr)
+  const paramSets = [
+    { pbx_call_id: pbxCallId },
+    { call_id: pbxCallId }
+  ];
+  
+  for (const params of paramSets) {
     try {
-      const params = { call_id: pbxCallId };
       const sign = zadarmaSign(endpoint, params);
       const sorted = {}; Object.keys(params).sort().forEach(k => sorted[k] = params[k]);
       const qs = new URLSearchParams(sorted).toString();
       
-      console.log(`[Recording] Attempting fetch from ${endpoint} for pbxCallId: ${pbxCallId}`);
+      console.log(`[Recording] Attempting ${endpoint} with params: ${qs}`);
       
       const response = await axios.get(
         `https://api.zadarma.com${endpoint}?${qs}`,
         { headers: { 'Authorization': zadarmaAuthHeader(sign) }, timeout: 15000 }
       );
       
-      const url = response.data?.links?.[0] || response.data?.link || response.data?.url || null;
+      const data = response.data;
+      // Zadarma zwraca: link (string) lub links (array) 
+      const url = (Array.isArray(data?.links) && data.links.length > 0)
+        ? data.links[0]
+        : (data?.link || null);
+        
       if (url) {
-        console.log(`[Recording] SUCCESS: Found via ${endpoint} for ${pbxCallId}: ${url}`);
+        console.log(`[Recording] SUCCESS for ${pbxCallId}: ${url}`);
         return url;
       }
+      
+      if (data?.status === 'success' && !url) {
+        console.log(`[Recording] API returned success but no link for ${pbxCallId}:`, JSON.stringify(data));
+      }
     } catch (e) {
+      const status = e.response?.status;
       const errorMsg = e.response?.data?.message || e.response?.data?.error || e.message;
-      console.log(`[Recording] INFO: ${endpoint} for ${pbxCallId} not ready yet: ${errorMsg}`);
+      console.log(`[Recording] ${endpoint} (${JSON.stringify(params)}) → HTTP ${status}: ${errorMsg}`);
+      // Nie przerywaj — spróbuj z drugim zestawem parametrów
     }
   }
   return null;
@@ -635,8 +618,28 @@ app.post('/api/contact/:id/task', async (req, res) => {
   }
 });
 
-// Prośba o edycję kontaktu → pełna wersja z Supabase zdefiniowana niżej (sekcja EDIT REQUESTS)
-// UWAGA: usunięto zduplikowany endpoint — właściwy jest w sekcji EDIT REQUESTS (~linia 2093)
+// Prośba o edycję kontaktu → zadanie dla Soni (E4/F2)
+app.post('/api/contact/:id/request-edit', async (req, res) => {
+  try {
+    const { contactName, notes } = req.body;
+    const taskData = {
+      title: `Prośba o edycję kontaktu: ${contactName || 'Pacjent'}`,
+      body: notes || 'Recepcja prosi o edycję danych kontaktu w systemie.',
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      status: 'incompleted',
+      assignedTo: GHL_SONIA_USER_ID
+    };
+    const response = await axios.post(
+      `https://services.leadconnectorhq.com/contacts/${req.params.id}/tasks`,
+      taskData,
+      { headers: ghlHeaders }
+    );
+    broadcast({ type: 'edit_request_created', task: response.data });
+    res.json({ success: true, task: response.data });
+  } catch (err) {
+    res.status(500).json({ error: err.message, details: err.response?.data });
+  }
+});
 
 // Usuń opportunity (B6 — tylko admin)
 app.delete('/api/opportunity/:id', async (req, res) => {
@@ -672,7 +675,32 @@ app.patch('/api/opportunity/:id', async (req, res) => {
 // Wszystkie połączenia z ostatnich 7 dni
 app.get('/api/calls', (req, res) => {
   const days = parseInt(req.query.days) || 7;
-  res.json({ calls: getRecentCalls(days) });
+  const { userId, role } = req.query;
+  let calls = getRecentCalls(days);
+  
+  // Filtrowanie per rola/użytkownik
+  if (role !== 'admin' && userId) {
+    const user = USERS[userId];
+    if (user && user.ext) {
+      // Recepcja i opiekunowie widzą tylko połączenia ze swojego numeru wewnętrznego
+      // Połączenie jest "ich" jeśli: caller_id zawiera ext, lub user_id === userId
+      calls = calls.filter(c => {
+        // Sprawdź user_id (zapisany przy raporcie)
+        if (c.userId === userId) return true;
+        // Sprawdź numer wewnętrzny w numerach telefonów
+        const from = String(c.from || '');
+        const to = String(c.to || '');
+        const extNum = user.ext;
+        // Zadarma: numer wewnętrzny pojawia się jako "100", "101", "102", "103"
+        // lub jako część numeru np. "103" w polu from/to przy połączeniach wewnętrznych
+        if (from === extNum || to === extNum) return true;
+        if (from.endsWith(extNum) || to.endsWith(extNum)) return true;
+        return false;
+      });
+    }
+  }
+  
+  res.json({ calls });
 });
 
 // Diagnostyka połączeń (I6)
@@ -1410,6 +1438,7 @@ app.get('/api/contact/:id/card', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 1;
+    const { userId, role } = req.query;
     const [contactsResp, oppsResp] = await Promise.allSettled([
       axios.get(`https://services.leadconnectorhq.com/contacts/?locationId=${GHL_LOCATION_ID}&limit=100`, { headers: ghlHeaders, timeout: 10000 }),
       axios.get(`https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&pipeline_id=${GHL_PIPELINE_ID}&limit=100`, { headers: ghlHeaders, timeout: 10000 })
@@ -1418,7 +1447,24 @@ app.get('/api/stats', async (req, res) => {
     const contacts = contactsResp.status === 'fulfilled' ? (contactsResp.value.data.contacts || []) : [];
     const opps     = oppsResp.status === 'fulfilled'     ? (oppsResp.value.data.opportunities || []) : [];
 
-    const periodCalls = getRecentCalls(days);
+    let periodCalls = getRecentCalls(days);
+
+    // Filtrowanie połączeń per rola/użytkownik
+    if (role !== 'admin' && userId) {
+      const user = USERS[userId];
+      if (user && user.ext) {
+        periodCalls = periodCalls.filter(c => {
+          if (c.userId === userId) return true;
+          const from = String(c.from || '');
+          const to = String(c.to || '');
+          const extNum = user.ext;
+          if (from === extNum || to === extNum) return true;
+          if (from.endsWith(extNum) || to.endsWith(extNum)) return true;
+          return false;
+        });
+      }
+    }
+
     const totalCalls  = periodCalls.length;
     const answered    = periodCalls.filter(c => c.status === 'ended' && c.tag === 'connected').length;
     const missed      = periodCalls.filter(c => c.tag === 'missed').length;
@@ -1521,7 +1567,47 @@ app.get('/api/stats', async (req, res) => {
       callsByHour,
       leadSources,
       cancellationStats,
-      recentCalls: periodCalls.slice(0, 100)
+      recentCalls: periodCalls.slice(0, 100),
+      // Podział per stanowisko i osoba (tylko dla admina)
+      agentBreakdown: (() => {
+        const allUsersArr = Object.values(USERS);
+        // Grupuj połączenia po ext (stanowisko)
+        const stations = {
+          reception: { label: 'Recepcja', ext: '103', calls: [], agents: {} },
+          agata_o:   { label: 'Agata (Opiekun)', ext: '101', calls: [], agents: {} },
+          aneta_o:   { label: 'Aneta (Opiekun)', ext: '102', calls: [], agents: {} },
+        };
+        const allCallsAll = getRecentCalls(days); // wszystkie, bez filtrowania
+        allCallsAll.forEach(c => {
+          const from = String(c.from || '');
+          const to   = String(c.to || '');
+          // Przypisz do stanowiska po ext
+          for (const [key, station] of Object.entries(stations)) {
+            const ext = station.ext;
+            if (from === ext || to === ext || from.endsWith(ext) || to.endsWith(ext)) {
+              station.calls.push(c);
+              // Przypisz do agenta po userId (jeśli jest)
+              if (c.userId) {
+                if (!station.agents[c.userId]) station.agents[c.userId] = { name: USERS[c.userId]?.name || c.userId, calls: 0, connected: 0, missed: 0 };
+                station.agents[c.userId].calls++;
+                if (c.tag === 'connected') station.agents[c.userId].connected++;
+                if (c.tag === 'missed') station.agents[c.userId].missed++;
+              }
+              break;
+            }
+          }
+        });
+        return Object.entries(stations).map(([key, s]) => ({
+          key,
+          label: s.label,
+          ext: s.ext,
+          total: s.calls.length,
+          connected: s.calls.filter(c => c.tag === 'connected').length,
+          missed: s.calls.filter(c => c.tag === 'missed').length,
+          ineffective: s.calls.filter(c => c.tag === 'ineffective').length,
+          agents: Object.values(s.agents)
+        }));
+      })()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1538,7 +1624,43 @@ app.get('/api/server-ip', async (req, res) => {
   }
 });
 
-// ─── SYSTEM UŻYTKOWNIKÓW — definicja przeniesiona na górę pliku ───────────────
+// ─── SYSTEM UŻYTKOWNIKÓW ───────────────────────────────────────────────────────
+const USERS = {
+  // RECEPCJA — numer wewnętrzny 103
+  kasia:      { id: 'kasia',      name: 'Kasia',         role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
+  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',     role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
+  asia:       { id: 'asia',       name: 'Asia',           role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
+  agata_r:    { id: 'agata_r',    name: 'Agata',          role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',     role: 'reception', ext: '103', ghlUserId: null },
+  // OPIEKUNOWIE — własne numery wewnętrzne
+  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun',  role: 'opiekun',   ext: '101', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun',  role: 'opiekun',   ext: '102', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
+  // ADMINISTRACJA — widzi wszystko
+  bartosz:    { id: 'bartosz',    name: 'Bartosz',        role: 'admin',     ext: null,  ghlUserId: null },
+  sandra:     { id: 'sandra',     name: 'Sandra',         role: 'admin',     ext: null,  ghlUserId: null },
+  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',      role: 'admin',     ext: null,  ghlUserId: null },
+  patrycja:   { id: 'patrycja',   name: 'Patrycja',       role: 'admin',     ext: null,  ghlUserId: null },
+  sonia:      { id: 'sonia',      name: 'Sonia',          role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
+};
+
+// ─── STAGE IDs LEJKA GHL ──────────────────────────────────────────────────────
+const GHL_STAGES = {
+  '4d006021-f3b2-4efc-8efc-4f049522379c': 'Nowe zgłoszenie',
+  '002dbc5a-c6a4-4931-a9a3-af4877b2c525': '1 próba kontaktu',
+  'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8': '2 próba kontaktu',
+  '6d0c5ca9-8b79-4bf3-a091-381e636cd21e': 'Follow-up dzień 2',
+  '53ad4911-a26c-41fa-9b23-bc3c88f98ea4': 'Follow-up dzień 4',
+  '6517c39e-15fe-4041-a847-89ba822b3c96': 'Brak kontaktu',
+  '19126f1b-5529-48fc-be95-d6b64e264e59': 'Po rozmowie',
+  '73f6704f-1d6a-49dc-8591-4b129ba1b692': 'Umówiony W0',
+  'afc5a678-b78b-47bd-858e-78968724ac4d': 'No-show',
+  '139cde76-d37e-4a14-ad45-ae94a843d78b': 'Odmówił',
+};
+const STAGE_NEW           = '4d006021-f3b2-4efc-8efc-4f049522379c';
+const STAGE_ATTEMPT_1     = '002dbc5a-c6a4-4931-a9a3-af4877b2c525';
+const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
+const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
+const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
 
 app.get('/api/users', (req, res) => {
   const list = Object.values(USERS).map(u => ({ id: u.id, name: u.name, role: u.role, ghlUserId: u.ghlUserId }));

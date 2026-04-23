@@ -182,13 +182,29 @@ function initApp() {
   }, 300);
 }
 
-// startHeaderClock() usunięta — logika jest już w updateClock()
+// ==================== ZEGAR W NAGŁÓWKU ====================
+function startHeaderClock() {
+  function update() {
+    const now = new Date();
+    const timeEl = document.getElementById('clockTime');
+    const dateEl = document.getElementById('clockDate');
+    if (timeEl) {
+      timeEl.textContent = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    if (dateEl) {
+      dateEl.textContent = now.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+  }
+  update();
+  setInterval(update, 1000);
+}
 
 async function loadDashboardData() {
   loadDashboardPool(); // Załaduj pulę zadań na kokpicie
   try {
     // Pobierz statystyki i ostatnie połączenia
-    const statsResp = await fetch('/api/stats?days=1');
+    const uid = currentUser?.id || ''; const rol = currentUser?.role || 'reception';
+    const statsResp = await fetch(`/api/stats?days=1&userId=${uid}&role=${rol}`);
     if (statsResp.ok) {
       const statsData = await statsResp.json();
       updateKPIs(statsData);
@@ -203,7 +219,8 @@ async function loadDashboardData() {
 
   // Pobierz połączenia (aktualizuje kpi-calls i kpi-missed)
   try {
-    const callsResp = await fetch('/api/calls?days=1');
+    const uid2 = currentUser?.id || ''; const rol2 = currentUser?.role || 'reception';
+    const callsResp = await fetch(`/api/calls?days=1&userId=${uid2}&role=${rol2}`);
     if (callsResp.ok) {
       const callsData = await callsResp.json();
       allCalls = callsData.calls || [];
@@ -1090,7 +1107,18 @@ function escHtml(str) {
 }
 
 // ==================== CALLS — BLOK C ====================
-// UWAGA: loadCalls() jest zdefiniowana niżej — wersja z /api/calls/history (z raportami i nagraniami)
+async function loadCalls() {
+  try {
+    const uid = currentUser?.id || '';
+    const rol = currentUser?.role || 'reception';
+    const r = await fetch(`/api/calls?days=7&userId=${uid}&role=${rol}`);
+    const data = await r.json();
+    allCalls = data.calls || [];
+    renderCallsTable(allCalls);
+  } catch(e) {
+    console.error('loadCalls error:', e);
+  }
+}
 
 function renderCallsTable(calls) {
   const container = document.getElementById('callsFeed');
@@ -1111,7 +1139,52 @@ function renderCallsTable(calls) {
     return true;
   });
 
-  container.innerHTML = `
+  // Admin: filtr po stanowisku/osobie
+  const isAdmin = currentUser?.role === 'admin';
+  const activeStation = document.getElementById('filter-station')?.value || 'all';
+  const activeAgent   = document.getElementById('filter-agent')?.value || 'all';
+  
+  let finalFiltered = filtered;
+  if (isAdmin) {
+    if (activeStation !== 'all') {
+      const extMap = { reception: '103', agata_o: '101', aneta_o: '102' };
+      const ext = extMap[activeStation];
+      if (ext) finalFiltered = finalFiltered.filter(c => {
+        const from = String(c.from || ''); const to = String(c.to || '');
+        return from === ext || to === ext || from.endsWith(ext) || to.endsWith(ext) || c.userId === activeStation;
+      });
+    }
+    if (activeAgent !== 'all') {
+      finalFiltered = finalFiltered.filter(c => c.userId === activeAgent);
+    }
+  } else {
+    finalFiltered = filtered;
+  }
+
+  // Admin filter bar
+  const adminFilterBar = isAdmin ? `
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 0;flex-wrap:wrap;">
+      <label style="font-size:12px;font-weight:600;color:#64748b;">Stanowisko:</label>
+      <select id="filter-station" onchange="renderCallsTable(allCalls)" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;">
+        <option value="all">Wszystkie</option>
+        <option value="reception">📞 Recepcja (103)</option>
+        <option value="agata_o">👤 Agata Opiekun (101)</option>
+        <option value="aneta_o">👤 Aneta Opiekun (102)</option>
+      </select>
+      <label style="font-size:12px;font-weight:600;color:#64748b;">Osoba:</label>
+      <select id="filter-agent" onchange="renderCallsTable(allCalls)" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;">
+        <option value="all">Wszyscy</option>
+        <option value="kasia">Kasia</option>
+        <option value="agnieszka">Agnieszka</option>
+        <option value="asia">Asia</option>
+        <option value="agata_r">Agata (Rec.)</option>
+        <option value="zastepstwo">Zastępstwo</option>
+        <option value="agata_o">Agata Opiekun</option>
+        <option value="aneta_o">Aneta Opiekun</option>
+      </select>
+    </div>` : '';
+
+  container.innerHTML = adminFilterBar + `
     <table class="calls-table">
       <thead>
         <tr>
@@ -1122,19 +1195,20 @@ function renderCallsTable(calls) {
           <th>Połączenie</th>
           <th>Wynik rozmowy</th>
           <th>Czas</th>
+          ${isAdmin ? '<th>Agent</th>' : ''}
           <th>Rozmowa</th>
           <th>Nagranie</th>
           <th>Akcje</th>
         </tr>
       </thead>
       <tbody>
-        ${filtered.map(c => renderCallRow(c)).join('')}
+        ${finalFiltered.map(c => renderCallRow(c, isAdmin)).join('')}
       </tbody>
     </table>
   `;
 }
 
-function renderCallRow(c) {
+function renderCallRow(c, isAdmin = false) {
   const ts = c.timestamp ? new Date(c.timestamp) : null;
   const date = ts ? ts.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' }) : '';
   const time = ts ? ts.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -1162,8 +1236,24 @@ function renderCallRow(c) {
       : `<button class="btn-fetch-rec" onclick="fetchRecording('${c.callId}', this)" title="Sprawdź nagranie">▶ Sprawdź</button>`;
 
   // Kto obsługiwał
-  const agentHtml = c.userId
-    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(c.userId)}</div>` : '';
+  // Agent name mapping
+  const agentNames = {
+    kasia: 'Kasia', agnieszka: 'Agnieszka', asia: 'Asia', agata_r: 'Agata (Rec.)',
+    zastepstwo: 'Zastępstwo', agata_o: 'Agata Opiekun', aneta_o: 'Aneta Opiekun',
+    bartosz: 'Bartosz', sandra: 'Sandra', aneta_a: 'Aneta (A)', patrycja: 'Patrycja', sonia: 'Sonia'
+  };
+  const agentName = c.userId ? (agentNames[c.userId] || c.userId) : null;
+  const agentHtml = agentName
+    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(agentName)}</div>` : '';
+  // Agent role tag for admin column
+  const agentRoles = { agata_o: 'opiekun', aneta_o: 'opiekun' };
+  const agentRole = c.userId ? (agentRoles[c.userId] || 'reception') : null;
+  const agentTagHtml = agentName
+    ? `<div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:12px;font-weight:600;color:#1e293b;">👤 ${escHtml(agentName)}</span>
+        <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${agentRole === 'opiekun' ? '#dbeafe' : '#dcfce7'};color:${agentRole === 'opiekun' ? '#1d4ed8' : '#166534'};font-weight:600;">${agentRole === 'opiekun' ? 'Opiekun' : 'Recepcja'}</span>
+       </div>`
+    : '<span style="color:#94a3b8;font-size:11px;">—</span>';
 
   // Etap lejka
   const stageHtml = getStageTagHtml(c.stageId, c.stageName);
@@ -1217,8 +1307,8 @@ function renderCallRow(c) {
       </td>
       <td>
         <div style="font-size:13px;font-weight:600;color:#1e293b;">${dur}</div>
-        ${agentHtml}
       </td>
+      ${isAdmin ? `<td onclick="event.stopPropagation()">${agentTagHtml}</td>` : ''}
       <td onclick="event.stopPropagation()">${recHtml}</td>
       <td onclick="event.stopPropagation()">
         <div style="display:flex;flex-direction:column;gap:4px;">
@@ -1431,7 +1521,6 @@ async function initiateCall(phone, name, contactId, oppId) {
 }
 
 // ==================== CALL POPUP (C6/C7/C8) ====================
-
 function openCallPopup(contact) {
   currentContact = contact;
 
@@ -1674,30 +1763,10 @@ function resetReportForm() {
   document.querySelectorAll('.report-form').forEach(f => f.classList.add('hidden'));
   document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.outcome-fields').forEach(f => f.classList.add('hidden'));
+  const manualNameInput = document.getElementById('manualPatientName');
+  if (manualNameInput) manualNameInput.value = '';
   selectedStatus = null;
   selectedOutcome = null;
-  // Wyczyść wszystkie pola formularza raportu
-  const fieldIds = [
-    'programLeczenia', 'dataW0', 'contactDateTime', 'powodRezygnacji',
-    'powodZmiany', 'nowyTermin', 'powodOdwolania', 'wizytaContactDateTime',
-    'stalyNotatka', 'stalyDataWizyty', 'stalyContactDateTime', 'spamNotatka',
-    'manualPatientName'
-  ];
-  fieldIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      if (el.tagName === 'SELECT') el.selectedIndex = 0;
-      else el.value = '';
-    }
-  });
-  // Ukryj sekcję nagrania w popup
-  const recSection = document.getElementById('popupRecordingSection');
-  if (recSection) recSection.style.display = 'none';
-  // Ukryj blokadę W0
-  const w0Notice = document.getElementById('w0BlockNotice');
-  if (w0Notice) w0Notice.classList.add('hidden');
-  const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
-  if (newPatientTile) { newPatientTile.style.opacity = ''; newPatientTile.style.cursor = ''; newPatientTile.title = ''; }
 }
 
 // ==================== STATUS SELECTION (C7 — 2x2 tiles) ====================
@@ -2714,7 +2783,8 @@ async function loadAndRenderStats() {
   try {
     const range = document.getElementById('statsRange')?.value || 'today';
     const days = range === 'today' ? 1 : range === 'week' ? 7 : 30;
-    const r = await fetch(`/api/stats?days=${days}`);
+    const uid3 = currentUser?.id || ''; const rol3 = currentUser?.role || 'reception';
+    const r = await fetch(`/api/stats?days=${days}&userId=${uid3}&role=${rol3}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     updateStatCards(data);
@@ -2842,7 +2912,7 @@ function appendChatMessage(from, text, ts, isMine) {
 function renderCharts(statsData) {
   // Jeśli brak danych, pobierz najpierw
   if (!statsData) {
-    fetch('/api/stats').then(r => r.json()).then(d => renderCharts(d)).catch(() => renderCharts({}));
+    { const uid4 = currentUser?.id || ''; const rol4 = currentUser?.role || 'reception'; fetch(`/api/stats?userId=${uid4}&role=${rol4}`).then(r => r.json()).then(d => renderCharts(d)).catch(() => renderCharts({})); }
     return;
   }
   renderDonutChart(statsData);
@@ -2929,6 +2999,40 @@ function updateStatCards(data) {
 
   // Czas trwania
   setEl('stat-avg-duration', `${mins}:${String(secs).padStart(2,'0')}`);
+
+  // Podział per stanowisko (tylko admin)
+  if (currentUser?.role === 'admin' && data.agentBreakdown) {
+    const breakdownEl = document.getElementById('agentBreakdownSection');
+    if (breakdownEl) {
+      breakdownEl.innerHTML = `
+        <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 12px 0;">📊 Podział połączeń per stanowisko</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;">
+          ${data.agentBreakdown.map(st => `
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+              <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">${st.label} <span style="font-size:11px;color:#94a3b8;">(${st.ext})</span></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="font-size:12px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:600;">✅ ${st.connected} odebranych</span>
+                <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:6px;font-weight:600;">❌ ${st.missed} nieodebranych</span>
+                <span style="font-size:12px;background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:6px;font-weight:600;">⚡ ${st.ineffective} nieskutecznych</span>
+              </div>
+              ${st.agents.length > 0 ? `
+                <div style="font-size:11px;color:#64748b;margin-top:6px;font-weight:600;">Osoby:</div>
+                ${st.agents.map(a => `
+                  <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #f1f5f9;">
+                    <span>👤 ${a.name}</span>
+                    <span style="color:#64748b;">${a.calls} poł. (${a.connected} ✅ / ${a.missed} ❌)</span>
+                  </div>`).join('')}
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+      breakdownEl.style.display = '';
+    }
+  } else {
+    const breakdownEl = document.getElementById('agentBreakdownSection');
+    if (breakdownEl) breakdownEl.style.display = 'none';
+  }
 
   // Powody odwołań
   const cancList = document.getElementById('cancellationReasonsList');
@@ -3437,7 +3541,10 @@ function showToast(message, type = 'info') {
 }
 
 // ==================== KPI UPDATES ====================
-// updateKPIs(data) jest zdefiniowane wyżej — ta sekcja celowo usunięta aby nie nadpisywać działającej wersji
+function updateKPIs() {
+  // KPI są aktualizowane przez loadNewLeads(), loadCalls() i updateMissedKPI()
+  // Ta funkcja jest pozostawiona jako placeholder dla przyszłych rozszerzeń
+}
 
 
 // ==================== PATIENT CARD ====================
