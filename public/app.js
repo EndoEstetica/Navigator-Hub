@@ -182,22 +182,7 @@ function initApp() {
   }, 300);
 }
 
-// ==================== ZEGAR W NAGŁÓWKU ====================
-function startHeaderClock() {
-  function update() {
-    const now = new Date();
-    const timeEl = document.getElementById('clockTime');
-    const dateEl = document.getElementById('clockDate');
-    if (timeEl) {
-      timeEl.textContent = now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-    if (dateEl) {
-      dateEl.textContent = now.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
-    }
-  }
-  update();
-  setInterval(update, 1000);
-}
+// startHeaderClock() usunięta — logika jest już w updateClock()
 
 async function loadDashboardData() {
   loadDashboardPool(); // Załaduj pulę zadań na kokpicie
@@ -1105,16 +1090,7 @@ function escHtml(str) {
 }
 
 // ==================== CALLS — BLOK C ====================
-async function loadCalls() {
-  try {
-    const r = await fetch('/api/calls?days=7');
-    const data = await r.json();
-    allCalls = data.calls || [];
-    renderCallsTable(allCalls);
-  } catch(e) {
-    console.error('loadCalls error:', e);
-  }
-}
+// UWAGA: loadCalls() jest zdefiniowana niżej — wersja z /api/calls/history (z raportami i nagraniami)
 
 function renderCallsTable(calls) {
   const container = document.getElementById('callsFeed');
@@ -1455,6 +1431,7 @@ async function initiateCall(phone, name, contactId, oppId) {
 }
 
 // ==================== CALL POPUP (C6/C7/C8) ====================
+
 function openCallPopup(contact) {
   currentContact = contact;
 
@@ -1697,10 +1674,30 @@ function resetReportForm() {
   document.querySelectorAll('.report-form').forEach(f => f.classList.add('hidden'));
   document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.outcome-fields').forEach(f => f.classList.add('hidden'));
-  const manualNameInput = document.getElementById('manualPatientName');
-  if (manualNameInput) manualNameInput.value = '';
   selectedStatus = null;
   selectedOutcome = null;
+  // Wyczyść wszystkie pola formularza raportu
+  const fieldIds = [
+    'programLeczenia', 'dataW0', 'contactDateTime', 'powodRezygnacji',
+    'powodZmiany', 'nowyTermin', 'powodOdwolania', 'wizytaContactDateTime',
+    'stalyNotatka', 'stalyDataWizyty', 'stalyContactDateTime', 'spamNotatka',
+    'manualPatientName'
+  ];
+  fieldIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    }
+  });
+  // Ukryj sekcję nagrania w popup
+  const recSection = document.getElementById('popupRecordingSection');
+  if (recSection) recSection.style.display = 'none';
+  // Ukryj blokadę W0
+  const w0Notice = document.getElementById('w0BlockNotice');
+  if (w0Notice) w0Notice.classList.add('hidden');
+  const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
+  if (newPatientTile) { newPatientTile.style.opacity = ''; newPatientTile.style.cursor = ''; newPatientTile.title = ''; }
 }
 
 // ==================== STATUS SELECTION (C7 — 2x2 tiles) ====================
@@ -3440,10 +3437,7 @@ function showToast(message, type = 'info') {
 }
 
 // ==================== KPI UPDATES ====================
-function updateKPIs() {
-  // KPI są aktualizowane przez loadNewLeads(), loadCalls() i updateMissedKPI()
-  // Ta funkcja jest pozostawiona jako placeholder dla przyszłych rozszerzeń
-}
+// updateKPIs(data) jest zdefiniowane wyżej — ta sekcja celowo usunięta aby nie nadpisywać działającej wersji
 
 
 // ==================== PATIENT CARD ====================

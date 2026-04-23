@@ -48,6 +48,41 @@ const ghlHeaders = {
   'Version': '2021-07-28'
 };
 
+// ─── SYSTEM UŻYTKOWNIKÓW (przeniesione wyżej — przed użyciem w handlerach) ───
+const USERS = {
+  kasia:      { id: 'kasia',      name: 'Kasia',      role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
+  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',  role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
+  asia:       { id: 'asia',       name: 'Asia',        role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
+  agata_r:    { id: 'agata_r',    name: 'Agata',       role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
+  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',  role: 'reception', ext: '103', ghlUserId: null },
+  bartosz:    { id: 'bartosz',    name: 'Bartosz',     role: 'admin',     ext: null,  ghlUserId: null },
+  sandra:     { id: 'sandra',     name: 'Sandra',      role: 'admin',     ext: null,  ghlUserId: null },
+  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',   role: 'admin',     ext: null,  ghlUserId: null },
+  patrycja:   { id: 'patrycja',   name: 'Patrycja',    role: 'admin',     ext: null,  ghlUserId: null },
+  sonia:      { id: 'sonia',      name: 'Sonia',       role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
+};
+
+// ─── STAGE IDs LEJKA GHL ──────────────────────────────────────────────────────
+const GHL_STAGES = {
+  '4d006021-f3b2-4efc-8efc-4f049522379c': 'Nowe zgłoszenie',
+  '002dbc5a-c6a4-4931-a9a3-af4877b2c525': '1 próba kontaktu',
+  'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8': '2 próba kontaktu',
+  '6d0c5ca9-8b79-4bf3-a091-381e636cd21e': 'Follow-up dzień 2',
+  '53ad4911-a26c-41fa-9b23-bc3c88f98ea4': 'Follow-up dzień 4',
+  '6517c39e-15fe-4041-a847-89ba822b3c96': 'Brak kontaktu',
+  '19126f1b-5529-48fc-be95-d6b64e264e59': 'Po rozmowie',
+  '73f6704f-1d6a-49dc-8591-4b129ba1b692': 'Umówiony W0',
+  'afc5a678-b78b-47bd-858e-78968724ac4d': 'No-show',
+  '139cde76-d37e-4a14-ad45-ae94a843d78b': 'Odmówił',
+};
+const STAGE_NEW           = '4d006021-f3b2-4efc-8efc-4f049522379c';
+const STAGE_ATTEMPT_1     = '002dbc5a-c6a4-4931-a9a3-af4877b2c525';
+const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
+const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
+const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
+
 // ─── In-memory store połączeń (I4: /api/calls) ───────────────────────────────
 // Przechowuje połączenia z ostatnich 7 dni (max 500 rekordów)
 const callsStore = [];
@@ -600,28 +635,8 @@ app.post('/api/contact/:id/task', async (req, res) => {
   }
 });
 
-// Prośba o edycję kontaktu → zadanie dla Soni (E4/F2)
-app.post('/api/contact/:id/request-edit', async (req, res) => {
-  try {
-    const { contactName, notes } = req.body;
-    const taskData = {
-      title: `Prośba o edycję kontaktu: ${contactName || 'Pacjent'}`,
-      body: notes || 'Recepcja prosi o edycję danych kontaktu w systemie.',
-      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      status: 'incompleted',
-      assignedTo: GHL_SONIA_USER_ID
-    };
-    const response = await axios.post(
-      `https://services.leadconnectorhq.com/contacts/${req.params.id}/tasks`,
-      taskData,
-      { headers: ghlHeaders }
-    );
-    broadcast({ type: 'edit_request_created', task: response.data });
-    res.json({ success: true, task: response.data });
-  } catch (err) {
-    res.status(500).json({ error: err.message, details: err.response?.data });
-  }
-});
+// Prośba o edycję kontaktu → pełna wersja z Supabase zdefiniowana niżej (sekcja EDIT REQUESTS)
+// UWAGA: usunięto zduplikowany endpoint — właściwy jest w sekcji EDIT REQUESTS (~linia 2093)
 
 // Usuń opportunity (B6 — tylko admin)
 app.delete('/api/opportunity/:id', async (req, res) => {
@@ -1523,40 +1538,7 @@ app.get('/api/server-ip', async (req, res) => {
   }
 });
 
-// ─── SYSTEM UŻYTKOWNIKÓW ───────────────────────────────────────────────────────
-const USERS = {
-  kasia:      { id: 'kasia',      name: 'Kasia',      role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
-  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',  role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
-  asia:       { id: 'asia',       name: 'Asia',        role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
-  agata_r:    { id: 'agata_r',    name: 'Agata',       role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
-  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',  role: 'reception', ext: '103', ghlUserId: null },
-  bartosz:    { id: 'bartosz',    name: 'Bartosz',     role: 'admin',     ext: null,  ghlUserId: null },
-  sandra:     { id: 'sandra',     name: 'Sandra',      role: 'admin',     ext: null,  ghlUserId: null },
-  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',   role: 'admin',     ext: null,  ghlUserId: null },
-  patrycja:   { id: 'patrycja',   name: 'Patrycja',    role: 'admin',     ext: null,  ghlUserId: null },
-  sonia:      { id: 'sonia',      name: 'Sonia',       role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
-};
-
-// ─── STAGE IDs LEJKA GHL ──────────────────────────────────────────────────────
-const GHL_STAGES = {
-  '4d006021-f3b2-4efc-8efc-4f049522379c': 'Nowe zgłoszenie',
-  '002dbc5a-c6a4-4931-a9a3-af4877b2c525': '1 próba kontaktu',
-  'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8': '2 próba kontaktu',
-  '6d0c5ca9-8b79-4bf3-a091-381e636cd21e': 'Follow-up dzień 2',
-  '53ad4911-a26c-41fa-9b23-bc3c88f98ea4': 'Follow-up dzień 4',
-  '6517c39e-15fe-4041-a847-89ba822b3c96': 'Brak kontaktu',
-  '19126f1b-5529-48fc-be95-d6b64e264e59': 'Po rozmowie',
-  '73f6704f-1d6a-49dc-8591-4b129ba1b692': 'Umówiony W0',
-  'afc5a678-b78b-47bd-858e-78968724ac4d': 'No-show',
-  '139cde76-d37e-4a14-ad45-ae94a843d78b': 'Odmówił',
-};
-const STAGE_NEW           = '4d006021-f3b2-4efc-8efc-4f049522379c';
-const STAGE_ATTEMPT_1     = '002dbc5a-c6a4-4931-a9a3-af4877b2c525';
-const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
-const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
-const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
+// ─── SYSTEM UŻYTKOWNIKÓW — definicja przeniesiona na górę pliku ───────────────
 
 app.get('/api/users', (req, res) => {
   const list = Object.values(USERS).map(u => ({ id: u.id, name: u.name, role: u.role, ghlUserId: u.ghlUserId }));
