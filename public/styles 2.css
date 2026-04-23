@@ -3762,7 +3762,7 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .dash-panel {
@@ -3773,8 +3773,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-height: 380px;
-  height: 100%;
+  min-height: 320px;
 }
 
 .dash-panel-header {
@@ -3810,8 +3809,7 @@ button {
   padding: 12px;
   flex: 1;
   overflow-y: auto;
-  max-height: 460px;
-  min-height: 0;
+  max-height: 420px;
 }
 
 .btn-icon-sm {
