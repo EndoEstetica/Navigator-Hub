@@ -3756,3 +3756,224 @@ button {
   border-top: 3px solid #1a56db;
   padding: 0 20px;
 }
+
+/* ── Dashboard Two-Column Layout ─────────────────────────────── */
+.dash-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.dash-panel {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 320px;
+}
+
+.dash-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dash-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-panel-title h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.dash-panel-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dash-panel-body {
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 420px;
+}
+
+.btn-icon-sm {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s;
+}
+.btn-icon-sm:hover { background: #f1f5f9; color: #1e293b; }
+
+/* Callback subsections */
+.callback-subsection {
+  margin-bottom: 12px;
+}
+
+.callback-subsection:last-child { margin-bottom: 0; }
+
+.callback-subsection-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.missed-label {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ineffective-label {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.callback-count {
+  background: rgba(0,0,0,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.callback-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.callback-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.15s;
+}
+
+.callback-item:hover {
+  border-color: #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.callback-item-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.avatar-missed { background: #fee2e2; color: #b91c1c; }
+.avatar-ineffective { background: #fef3c7; color: #92400e; }
+
+.callback-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.callback-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.callback-item-time {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.btn-callback-call {
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-callback-call:hover { background: #059669; transform: translateY(-1px); }
+
+.empty-state-sm {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 10px;
+}
+
+/* Pool items in dash-panel */
+.pool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
+  margin-bottom: 8px;
+  transition: all 0.15s;
+}
+.pool-item:hover { border-color: #e2e8f0; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.pool-item-info { flex: 1; min-width: 0; }
+.pool-item-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+.pool-item-meta { font-size: 11px; color: #64748b; margin-top: 3px; }
+
+.btn-claim {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-claim:hover { background: #2563eb; transform: translateY(-1px); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .dash-two-col { grid-template-columns: 1fr; }
+}

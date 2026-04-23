@@ -253,39 +253,57 @@ function updateKPIs(data) {
 }
 
 function updateDashboardLists(calls) {
+  // Zachowaj stary liveFeedList i callbackList dla kompatybilności
   const liveFeedEl = document.getElementById('liveFeedList');
   const callbackEl = document.getElementById('callbackList');
-  if (!liveFeedEl || !callbackEl) return;
-  
-  // ⚡ Live Feed
-  const recent = calls.slice(0, 10);
-  liveFeedEl.innerHTML = recent.length ? recent.map(c => `
-    <div class="live-feed-item">
-      <div class="feed-icon" style="background: ${c.direction === 'inbound' ? '#dbeafe' : '#f1f5f9'}; color: ${c.direction === 'inbound' ? '#3b82f6' : '#64748b'};">
-        ${c.direction === 'inbound' ? '📥' : '📤'}
+  if (liveFeedEl) liveFeedEl.innerHTML = '';
+  if (callbackEl) callbackEl.innerHTML = '';
+
+  // Nowe listy z podziałem
+  loadCallbackList(calls);
+}
+
+function loadCallbackList(callsData) {
+  const missedEl = document.getElementById('callbackMissedList');
+  const ineffectiveEl = document.getElementById('callbackIneffectiveList');
+  const badgeCb = document.getElementById('badge-callback');
+  const badgeMissed = document.getElementById('badge-missed-cb');
+  const badgeIneff = document.getElementById('badge-ineffective-cb');
+  if (!missedEl || !ineffectiveEl) return;
+
+  // Użyj przekazanych danych lub allCalls
+  const calls = callsData && Array.isArray(callsData) ? callsData : allCalls;
+
+  const missed = calls.filter(c => c.tag === 'missed' || c.status === 'missed');
+  const ineffective = calls.filter(c => (c.tag === 'ineffective' || c.status === 'ineffective') && c.direction === 'outbound');
+
+  const renderCallbackItem = (c) => `
+    <div class="callback-item">
+      <div class="callback-item-avatar ${c.tag === 'missed' ? 'avatar-missed' : 'avatar-ineffective'}">
+        ${(c.contactName || c.from || '?')[0].toUpperCase()}
       </div>
-      <div class="feed-content">
-        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
-        <div class="feed-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${c.direction === 'inbound' ? 'Przychodzące' : 'Wychodzące'}</div>
+      <div class="callback-item-info">
+        <div class="callback-item-name">${escHtml(c.contactName || c.from || 'Nieznany')}</div>
+        <div class="callback-item-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · ${new Date(c.timestamp).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}</div>
       </div>
-      <div class="status-badge status-${c.tag || 'connected'}">${c.tag === 'missed' ? 'Nieodebrane' : c.tag === 'ineffective' ? 'Bez odbioru' : 'Połączono'}</div>
+      <button class="btn-callback-call" onclick="initiateCall('${escHtml(c.from || '')}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">
+        &#128222; Oddzwoń
+      </button>
     </div>
-  `).join('') : '<div class="empty-state">Oczekiwanie na aktywność...</div>';
-  
-  // 📞 Lista do oddzwonienia
-  const toCall = calls.filter(c => c.tag === 'missed' || c.tag === 'ineffective').slice(0, 10);
-  callbackEl.innerHTML = toCall.length ? toCall.map(c => `
-    <div class="live-feed-item">
-      <div class="feed-icon" style="background: ${c.tag === 'missed' ? '#fee2e2' : '#fef3c7'}; color: ${c.tag === 'missed' ? '#ef4444' : '#d97706'};">
-        ${c.tag === 'missed' ? '🔴' : '🟡'}
-      </div>
-      <div class="feed-content">
-        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
-        <div class="feed-time">${c.tag === 'missed' ? 'Nieodebrane' : 'Nieskuteczne'} • ${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
-      </div>
-      <button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="initiateCall('${c.from}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">Oddzwoń</button>
-    </div>
-  `).join('') : '<div class="empty-state">Brak pacjentów do kontaktu</div>';
+  `;
+
+  missedEl.innerHTML = missed.length
+    ? missed.slice(0, 15).map(renderCallbackItem).join('')
+    : '<div class="empty-state-sm">Brak nieodebranych</div>';
+
+  ineffectiveEl.innerHTML = ineffective.length
+    ? ineffective.slice(0, 15).map(renderCallbackItem).join('')
+    : '<div class="empty-state-sm">Brak nieskutecznych</div>';
+
+  const total = missed.length + ineffective.length;
+  if (badgeCb) badgeCb.textContent = total;
+  if (badgeMissed) badgeMissed.textContent = missed.length;
+  if (badgeIneff) badgeIneff.textContent = ineffective.length;
 }
 
 let statsDonutChart = null;

@@ -120,66 +120,102 @@
         </div>
 
         <!-- SEKCJA: NOWE ZGŁOSZENIA -->
-        <div class="dashboard-section-block" style="margin-bottom:24px;">
-          <div class="section-header">
-            <h3>📥 Nowe zgłoszenia <span class="tab-badge" id="badge-new" style="margin-left:8px;">0</span></h3>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <div id="sourceFilters" class="source-filters" style="margin:0;">
-                <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')">Wszystkie</button>
+        <!-- ROW 1: NOWE ZGŁOSZENIA + DO ODDZWONIENIA -->
+        <div class="dash-two-col" style="margin-bottom:24px;">
+
+          <!-- NOWE ZGŁOSZENIA -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128229;</span>
+                <h3>Nowe zg&#322;oszenia</h3>
+                <span class="tab-badge" id="badge-new">0</span>
               </div>
-              <button class="btn-secondary" onclick="loadNewLeads()">&#8635; Odśwież</button>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <div id="sourceFilters" class="source-filters" style="margin:0;">
+                  <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')">Wszystkie</button>
+                </div>
+                <button class="btn-icon-sm" onclick="loadNewLeads()" title="Od&#347;wie&#380;">&#8635;</button>
+              </div>
+            </div>
+            <div id="newLeadsList" class="dash-panel-body leads-list">
+              <div class="loading-state"><div class="spinner"></div><p>&#321;adowanie...</p></div>
             </div>
           </div>
-          <div id="newLeadsList" class="leads-list">
-            <div class="loading-state">
-              <div class="spinner"></div>
-              <p>Ladowanie zgłoszeń...</p>
+
+          <!-- DO ODDZWONIENIA -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128222;</span>
+                <h3>Do oddzwonienia</h3>
+                <span class="tab-badge callback-badge" id="badge-callback">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadCallbackList()" title="Od&#347;wie&#380;">&#8635;</button>
+            </div>
+            <div class="dash-panel-body">
+              <!-- Nieodebrane -->
+              <div class="callback-subsection">
+                <div class="callback-subsection-label missed-label">
+                  <span>&#128245; Nieodebrane</span>
+                  <span class="callback-count" id="badge-missed-cb">0</span>
+                </div>
+                <div id="callbackMissedList" class="leads-list callback-sub-list">
+                  <div class="empty-state-sm">Brak nieodebranych</div>
+                </div>
+              </div>
+              <!-- Nieskuteczne wychodzace -->
+              <div class="callback-subsection">
+                <div class="callback-subsection-label ineffective-label">
+                  <span>&#128228; Nieskuteczne wychodz&#261;ce</span>
+                  <span class="callback-count" id="badge-ineffective-cb">0</span>
+                </div>
+                <div id="callbackIneffectiveList" class="leads-list callback-sub-list">
+                  <div class="empty-state-sm">Brak nieskutecznych</div>
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
 
-        <!-- Dashboard Layout: Live Feed & Callback List -->
-        <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
-          <div class="dashboard-section">
-            <div class="section-header">
-              <h3>⚡ Live Feed — Ostatnia aktywność</h3>
+        <!-- ROW 2: MOJE ZADANIA + PULA ZADAŃ -->
+        <div class="dash-two-col" style="margin-bottom:24px;">
+
+          <!-- MOJE ZADANIA NA DZIŚ -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128203;</span>
+                <h3>Moje zadania na dzi&#347;</h3>
+                <span class="tab-badge" id="badge-my-tasks">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadTodayTasks()" title="Od&#347;wie&#380;">&#8635;</button>
             </div>
-            <div id="liveFeedList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
-              <div class="empty-state">Oczekiwanie na aktywność...</div>
+            <div id="tasksTodayList" class="dash-panel-body tasks-list">
+              <div class="empty-state">&#321;adowanie zada&#324;...</div>
             </div>
           </div>
-          <div class="dashboard-section">
-            <div class="section-header">
-              <h3>📞 Lista do oddzwonienia</h3>
+
+          <!-- PULA ZADAŃ DO WZIĘCIA -->
+          <div class="dash-panel" id="dashboardPoolSection">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128197;</span>
+                <h3>Pula zada&#324; do wzi&#281;cia</h3>
+                <span class="pool-badge" id="dashboardPoolBadge">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadDashboardPool()" title="Od&#347;wie&#380;">&#8635;</button>
             </div>
-            <div id="callbackList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
-              <div class="empty-state">Brak pacjentów do kontaktu</div>
+            <div id="dashboardPoolList" class="dash-panel-body pool-list">
+              <div class="empty-state">Brak zada&#324; w puli</div>
             </div>
           </div>
+
         </div>
 
-        <!-- SEKCJA: ZADANIA -->
-        <div class="dashboard-section-block" style="margin-bottom:24px;">
-          <div class="section-header">
-            <h3>📋 Moje zadania na dziś</h3>
-            <button class="btn-icon" onclick="loadTodayTasks()" title="Odśwież">&#8635;</button>
-          </div>
-          <div id="tasksTodayList" class="tasks-list">
-            <div class="empty-state">Ladowanie zadań...</div>
-          </div>
-        </div>
-
-        <!-- SEKCJA: PULA ZADAŃ -->
-        <div class="pool-section" id="dashboardPoolSection" style="margin-bottom:24px;">
-          <div class="pool-header">
-            <h3>📅 Pula zadań do wzięcia <span class="pool-badge" id="dashboardPoolBadge">0</span></h3>
-            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="loadDashboardPool()">&#8635;</button>
-          </div>
-          <div class="pool-list" id="dashboardPoolList">
-            <div class="empty-state" style="padding:16px;">Brak zadań w puli</div>
-          </div>
-        </div>
-
+        <!-- Live Feed + stary callbackList (ukryte, zachowane dla kompatybilnosci JS) -->
+        <div style="display:none;"><div id="liveFeedList"></div><div id="callbackList"></div></div>
         <!-- Ukryte elementy zachowane dla kompatybilności JS -->
         <div style="display:none;">
           <div id="tab-new-leads"></div>
