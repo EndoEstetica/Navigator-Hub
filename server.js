@@ -172,6 +172,10 @@ async function loadCallsFromSupabase() {
 
 // ─── Kolejka retry nagrań (D2) ────────────────────────────────────────────────
 const recordingRetryQueue = new Map(); // callId → { attempts, pbxCallId, contactName }
+
+// Mapa aktywnych użytkowników: ext → userId (aktualizowana przy logowaniu/heartbeat)
+// Jedna osoba na jedno stanowisko jednocześnie
+const activeExtMap = new Map(); // '103' → 'kasia', '101' → 'agata_o', '102' → 'aneta_o'
 // Strategia retry: 5s, 30s, 1m, 2m, 5m, 10m, 20m, 30m, 60m
 const RETRY_DELAYS = [5000, 30000, 60000, 120000, 300000, 600000, 1200000, 1800000, 3600000];
 
@@ -834,18 +838,26 @@ app.post('/webhook/zadarma', async (req, res) => {
       recordingUrl: null,
       tag: null
     };
+    // Przypisz userId z mapy aktywnych użytkowników
+    const inboundExt = called || caller;
+    const assignedUserId = activeExtMap.get(inboundExt) || activeExtMap.get(caller) || null;
+    if (assignedUserId) { callObj.userId = assignedUserId; console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} → ${assignedUserId}`); }
     storeCall(callObj);
     broadcast({ type: 'CALL_RINGING', ...callObj });
   }
 
   else if (event === 'NOTIFY_OUT_START' || event === 'OUTGOING') {
     // Połączenie wychodzące — jeśli już istnieje z click-to-call, tylko aktualizuj pbxCallId
+    // Przypisz userId z mapy aktywnych użytkowników (wychodzące)
+    const outboundExt = caller || called;
+    const outUserId = activeExtMap.get(outboundExt) || null;
+    if (outUserId) console.log(`[ActiveExt] Outbound ${callId}: ext ${outboundExt} → ${outUserId}`);
     const existing = callsStore.find(c => c.callId === callId);
     if (existing) {
-      storeCall({ callId, pbxCallId, status: 'ringing' });
+      storeCall({ callId, pbxCallId, status: 'ringing', userId: outUserId || existing.userId });
     } else {
       storeCall({
-        callId, pbxCallId, direction: 'outbound', status: 'ringing',
+        callId, pbxCallId, direction: 'outbound', status: 'ringing', userId: outUserId,
         from: caller || called, to: called || caller,
         timestamp: new Date().toISOString(), recordingUrl: null, tag: null
       });
@@ -1683,6 +1695,12 @@ app.get('/api/user/:id', async (req, res) => {
       }, { onConflict: 'user_id' });
     } catch(e) { console.error('[Activity] Error:', e.message); }
   }
+
+  // Zaktualizuj mapę aktywnych użytkowników (ext → userId)
+  if (user.ext) {
+    activeExtMap.set(user.ext, user.id);
+    console.log(`[ActiveExt] Login: ext ${user.ext} → ${user.id}`);
+  }
   
   res.json(user);
 });
@@ -2392,6 +2410,10 @@ app.post('/api/users/:id/heartbeat', async (req, res) => {
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
     } catch(e) { /* ignoruj */ }
+  }
+  // Odśwież mapę aktywnych użytkowników
+  if (user.ext) {
+    activeExtMap.set(user.ext, user.id);
   }
   res.json({ success: true });
 });
