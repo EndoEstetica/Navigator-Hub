@@ -120,66 +120,102 @@
         </div>
 
         <!-- SEKCJA: NOWE ZGŁOSZENIA -->
-        <div class="dashboard-section-block" style="margin-bottom:24px;">
-          <div class="section-header">
-            <h3>📥 Nowe zgłoszenia <span class="tab-badge" id="badge-new" style="margin-left:8px;">0</span></h3>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <div id="sourceFilters" class="source-filters" style="margin:0;">
-                <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')">Wszystkie</button>
+        <!-- ROW 1: NOWE ZGŁOSZENIA + DO ODDZWONIENIA -->
+        <div class="dash-two-col" style="margin-bottom:24px;">
+
+          <!-- NOWE ZGŁOSZENIA -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128229;</span>
+                <h3>Nowe zg&#322;oszenia</h3>
+                <span class="tab-badge" id="badge-new">0</span>
               </div>
-              <button class="btn-secondary" onclick="loadNewLeads()">&#8635; Odśwież</button>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <div id="sourceFilters" class="source-filters" style="margin:0;">
+                  <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')">Wszystkie</button>
+                </div>
+                <button class="btn-icon-sm" onclick="loadNewLeads()" title="Od&#347;wie&#380;">&#8635;</button>
+              </div>
+            </div>
+            <div id="newLeadsList" class="dash-panel-body leads-list">
+              <div class="loading-state"><div class="spinner"></div><p>&#321;adowanie...</p></div>
             </div>
           </div>
-          <div id="newLeadsList" class="leads-list">
-            <div class="loading-state">
-              <div class="spinner"></div>
-              <p>Ladowanie zgłoszeń...</p>
+
+          <!-- DO ODDZWONIENIA -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128222;</span>
+                <h3>Do oddzwonienia</h3>
+                <span class="tab-badge callback-badge" id="badge-callback">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadCallbackList()" title="Od&#347;wie&#380;">&#8635;</button>
+            </div>
+            <div class="dash-panel-body">
+              <!-- Nieodebrane -->
+              <div class="callback-subsection">
+                <div class="callback-subsection-label missed-label">
+                  <span>&#128245; Nieodebrane</span>
+                  <span class="callback-count" id="badge-missed-cb">0</span>
+                </div>
+                <div id="callbackMissedList" class="leads-list callback-sub-list">
+                  <div class="empty-state-sm">Brak nieodebranych</div>
+                </div>
+              </div>
+              <!-- Nieskuteczne wychodzace -->
+              <div class="callback-subsection">
+                <div class="callback-subsection-label ineffective-label">
+                  <span>&#128228; Nieskuteczne wychodz&#261;ce</span>
+                  <span class="callback-count" id="badge-ineffective-cb">0</span>
+                </div>
+                <div id="callbackIneffectiveList" class="leads-list callback-sub-list">
+                  <div class="empty-state-sm">Brak nieskutecznych</div>
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
 
-        <!-- Dashboard Layout: Live Feed & Callback List -->
-        <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
-          <div class="dashboard-section">
-            <div class="section-header">
-              <h3>⚡ Live Feed — Ostatnia aktywność</h3>
+        <!-- ROW 2: MOJE ZADANIA + PULA ZADAŃ -->
+        <div class="dash-two-col" style="margin-bottom:24px;">
+
+          <!-- MOJE ZADANIA NA DZIŚ -->
+          <div class="dash-panel">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128203;</span>
+                <h3>Moje zadania na dzi&#347;</h3>
+                <span class="tab-badge" id="badge-my-tasks">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadTodayTasks()" title="Od&#347;wie&#380;">&#8635;</button>
             </div>
-            <div id="liveFeedList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
-              <div class="empty-state">Oczekiwanie na aktywność...</div>
+            <div id="tasksTodayList" class="dash-panel-body tasks-list">
+              <div class="empty-state">&#321;adowanie zada&#324;...</div>
             </div>
           </div>
-          <div class="dashboard-section">
-            <div class="section-header">
-              <h3>📞 Lista do oddzwonienia</h3>
+
+          <!-- PULA ZADAŃ DO WZIĘCIA -->
+          <div class="dash-panel" id="dashboardPoolSection">
+            <div class="dash-panel-header">
+              <div class="dash-panel-title">
+                <span class="dash-panel-icon">&#128197;</span>
+                <h3>Pula zada&#324; do wzi&#281;cia</h3>
+                <span class="pool-badge" id="dashboardPoolBadge">0</span>
+              </div>
+              <button class="btn-icon-sm" onclick="loadDashboardPool()" title="Od&#347;wie&#380;">&#8635;</button>
             </div>
-            <div id="callbackList" class="leads-list" style="max-height: 400px; overflow-y: auto;">
-              <div class="empty-state">Brak pacjentów do kontaktu</div>
+            <div id="dashboardPoolList" class="dash-panel-body pool-list">
+              <div class="empty-state">Brak zada&#324; w puli</div>
             </div>
           </div>
+
         </div>
 
-        <!-- SEKCJA: ZADANIA -->
-        <div class="dashboard-section-block" style="margin-bottom:24px;">
-          <div class="section-header">
-            <h3>📋 Moje zadania na dziś</h3>
-            <button class="btn-icon" onclick="loadTodayTasks()" title="Odśwież">&#8635;</button>
-          </div>
-          <div id="tasksTodayList" class="tasks-list">
-            <div class="empty-state">Ladowanie zadań...</div>
-          </div>
-        </div>
-
-        <!-- SEKCJA: PULA ZADAŃ -->
-        <div class="pool-section" id="dashboardPoolSection" style="margin-bottom:24px;">
-          <div class="pool-header">
-            <h3>📅 Pula zadań do wzięcia <span class="pool-badge" id="dashboardPoolBadge">0</span></h3>
-            <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="loadDashboardPool()">&#8635;</button>
-          </div>
-          <div class="pool-list" id="dashboardPoolList">
-            <div class="empty-state" style="padding:16px;">Brak zadań w puli</div>
-          </div>
-        </div>
-
+        <!-- Live Feed + stary callbackList (ukryte, zachowane dla kompatybilnosci JS) -->
+        <div style="display:none;"><div id="liveFeedList"></div><div id="callbackList"></div></div>
         <!-- Ukryte elementy zachowane dla kompatybilności JS -->
         <div style="display:none;">
           <div id="tab-new-leads"></div>
@@ -207,6 +243,62 @@
           <button class="call-filter-btn" data-filter="missed" onclick="filterCalls('missed')">🔴 Nieodebrane</button>
           <button class="call-filter-btn" data-filter="connected" onclick="filterCalls('connected')">🟢 Połączone</button>
         </div>
+
+        <!-- Pasek zaawansowanych filtrów -->
+        <div id="calls-advanced-filters" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:10px 0 6px 0;border-bottom:1px solid #e2e8f0;margin-bottom:8px;">
+          <!-- Zakres czasowy -->
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Zakres</label>
+            <select id="filter-range" onchange="loadCalls()" style="font-size:12px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+              <option value="7">Ostatni tydzień</option>
+              <option value="30" selected>Ostatni miesiąc</option>
+              <option value="90">Ostatnie 3 miesiące</option>
+              <option value="365">Ostatni rok</option>
+            </select>
+          </div>
+          <!-- Data od -->
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Data od</label>
+            <input type="date" id="filter-date-from" onchange="loadCalls()" style="font-size:12px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+          </div>
+          <!-- Data do -->
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Data do</label>
+            <input type="date" id="filter-date-to" onchange="loadCalls()" style="font-size:12px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+          </div>
+          <!-- Szukaj po nazwisku -->
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Szukaj pacjenta</label>
+            <input type="text" id="filter-search-name" placeholder="Imię lub nazwisko..." oninput="clearTimeout(window._searchTimer); window._searchTimer=setTimeout(loadCalls,400)" style="font-size:12px;padding:5px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;min-width:180px;">
+          </div>
+          <!-- Stanowisko (tylko admin — pokazywane przez JS) -->
+          <div id="admin-filter-station" style="display:none;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Stanowisko</label>
+            <select id="filter-station" onchange="loadCalls()" style="font-size:12px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+              <option value="all">Wszystkie</option>
+              <option value="reception">📞 Recepcja (103)</option>
+              <option value="agata_o">👤 Agata Opiekun (101)</option>
+              <option value="aneta_o">👤 Aneta Opiekun (102)</option>
+            </select>
+          </div>
+          <!-- Osoba (tylko admin) -->
+          <div id="admin-filter-agent" style="display:none;flex-direction:column;gap:3px;">
+            <label style="font-size:11px;font-weight:600;color:#64748b;">Osoba</label>
+            <select id="filter-agent" onchange="loadCalls()" style="font-size:12px;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+              <option value="all">Wszyscy</option>
+              <option value="kasia">Kasia</option>
+              <option value="agnieszka">Agnieszka</option>
+              <option value="asia">Asia</option>
+              <option value="agata_r">Agata (Rec.)</option>
+              <option value="zastepstwo">Zastępstwo</option>
+              <option value="agata_o">Agata Opiekun</option>
+              <option value="aneta_o">Aneta Opiekun</option>
+            </select>
+          </div>
+          <!-- Reset -->
+          <button onclick="document.getElementById('filter-date-from').value='';document.getElementById('filter-date-to').value='';document.getElementById('filter-search-name').value='';document.getElementById('filter-range').value='30';loadCalls();" style="font-size:12px;padding:5px 12px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;cursor:pointer;align-self:flex-end;">✕ Wyczyść</button>
+        </div>
+
         <div id="callsFeed" class="calls-feed">
           <div class="empty-state">Oczekiwanie na połączenia...</div>
         </div>
@@ -257,43 +349,21 @@
           </div>
 
           <!-- Moje zadania: lista dzienna + kalendarz miesięczny -->
-          <div id="tab-tasks-my" class="tab-content active">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
-              <!-- Lewa: zadania na dziś -->
-              <div>
-                <div style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
-                  Dziś — <span id="tasksTodayDateLabel"></span>
-                </div>
-                <div id="tasksMyList" class="tasks-list">
-                  <div class="loading-state"><div class="spinner"></div><p>Ładowanie...</p></div>
-                </div>
-              </div>
-              <!-- Prawa: kalendarz miesięczny -->
-              <div class="tasks-calendar" id="tasksCalendar">
-                <div class="calendar-header">
-                  <button class="calendar-nav-btn" onclick="calendarPrev()">&#8249;</button>
-                  <h3 id="calendarMonthLabel">Kwiecień 2026</h3>
-                  <button class="calendar-nav-btn" onclick="calendarNext()">&#8250;</button>
-                </div>
-                <div class="calendar-grid" id="calendarGrid">
-                  <!-- Wypełniane przez JS -->
-                </div>
-              </div>
-            </div>
+                    <div id="tab-tasks-my" class="tab-content active">
+            <div id="tasksMyList" class="tasks-list"></div>
           </div>
-
-          <!-- Pula zadań -->
+          <div id="tab-tasks-today" class="tab-content">
+            <div id="tasksTodayListLarge" class="tasks-list"></div>
+          </div>
           <div id="tab-tasks-pool" class="tab-content">
-            <div id="tasksPoolList" class="tasks-list">
-              <div class="empty-state">Brak zadań w puli</div>
-            </div>
+            <div id="tasksPoolList" class="tasks-list"></div>
           </div>
-
-          <!-- Wszystkie zadania -->
           <div id="tab-tasks-all" class="tab-content">
-            <div id="tasksAllList" class="tasks-list">
-              <div class="empty-state">Brak zadań</div>
-            </div>
+            <div id="tasksAllList" class="tasks-list"></div>
+          </div>
+          <div id="tab-tasks-archive" class="tab-content">
+            <div id="tasksArchiveList" class="tasks-list"></div>
+          </div>
           </div>
         </div>
       </div>
@@ -415,6 +485,36 @@
             <h3>📊 Źródła leadów</h3>
             <canvas id="leadSourcesChart" width="200" height="200"></canvas>
           </div>
+          <!-- Podział per stanowisko — tylko admin -->
+          
+        <!-- Metryki Operacyjne (Reception OS) -->
+        <div style="grid-column: 1/-1; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <h3 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 12px 0;">🚀 Metryki Skuteczności i Czasu</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Lead → Pierwszy kontakt</div>
+              <div id="metric-lead-first" style="font-size: 24px; font-weight: 800; color: #3b82f6; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (minuty)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Pierwszy kontakt → W0</div>
+              <div id="metric-first-w0" style="font-size: 24px; font-weight: 800; color: #10b981; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (dni)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Oczekiwanie na wizytę</div>
+              <div id="metric-w0-wait" style="font-size: 24px; font-weight: 800; color: #f59e0b; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (dni)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Konwersja Follow-up</div>
+              <div id="metric-fu-conv" style="font-size: 24px; font-weight: 800; color: #8b5cf6; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">skuteczność zapisu (%)</div>
+            </div>
+          </div>
+        </div>
+<div id="agentBreakdownSection" style="display:none;grid-column:1/-1;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:8px;">
+          </div>
           <div class="stats-table-section">
             <h3>📋 Powody odwołań</h3>
             <div id="cancellationReasonsList" class="cancellation-list">
@@ -430,22 +530,6 @@
           <div class="stats-duration-sub">Średni czas rozmowy</div>
         </div>
 
-        <!-- Tabela szczegółowa (zachowana) -->
-        <div class="stats-detail-card">
-          <h3>Szczegółowe statystyki</h3>
-          <table class="stats-table">
-            <thead>
-              <tr><th>Metryka</th><th>Wartość</th><th>%</th><th>Trend</th></tr>
-            </thead>
-            <tbody id="statsTableBody">
-              <tr><td>Odebrane</td><td>776</td><td>74.19%</td><td class="trend-up">↑</td></tr>
-              <tr><td>Nieodebrane</td><td>118</td><td>11.28%</td><td class="trend-down">↓</td></tr>
-              <tr><td>Rozłączenia na zapowiedzi (godz. pracy)</td><td>129</td><td>12.33%</td><td class="trend-neutral">→</td></tr>
-              <tr><td>Rozłączenia na zapowiedzi (poza godz.)</td><td>23</td><td>2.2%</td><td class="trend-neutral">→</td></tr>
-              <tr><td>Zgłoszenia do oddzwonienia</td><td>129</td><td>—</td><td class="trend-up">↑</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </main>
   </div>
@@ -453,7 +537,7 @@
   <!-- ==================== POP-UP: AKTYWNE POŁĄCZENIE ==================== -->
   <div id="callPopup" class="call-popup hidden">
     <div class="popup-overlay" onclick="closeCallPopup()"></div>
-    <div class="popup-content">
+    <div class="popup-content" onclick="if(document.getElementById('callPopup').classList.contains('minimized')) restoreCallPopup();">
       <div class="popup-header">
         <div class="call-status-indicator" id="popupCallStatus">
           <span class="pulse-dot"></span>
@@ -482,6 +566,21 @@
           <div id="popupZCzymSieZglasza" class="zglosza-info hidden">
             <span class="zglosza-label">Z czym się zgłasza:</span>
             <span class="zglosza-value" id="popupZglosza">—</span>
+          </div>
+          <!-- Wzbogacenie popupu: etap GHL, W0, ostatnia notatka -->
+          <div id="popupEnrichSection" class="hidden" style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
+            <div id="popupStageRow" class="hidden" style="display:flex; align-items:center; gap:6px; font-size:12px;">
+              <span style="color:#64748b; font-weight:600;">Etap GHL:</span>
+              <span id="popupStageName" style="padding:2px 8px; border-radius:12px; background:#dbeafe; color:#1e40af; font-weight:700; font-size:11px;">—</span>
+            </div>
+            <div id="popupW0Row" class="hidden" style="display:flex; align-items:center; gap:6px; font-size:12px;">
+              <span style="color:#10b981; font-weight:600;">📅 W0:</span>
+              <span id="popupW0Info" style="color:#065f46; font-weight:600;">—</span>
+            </div>
+            <div id="popupLastNoteRow" class="hidden" style="font-size:12px; color:#64748b; font-style:italic; border-left:2px solid #e2e8f0; padding-left:8px; margin-top:2px;">
+              <span style="font-weight:600; color:#475569; font-style:normal;">Ostatnia notatka: </span>
+              <span id="popupLastNoteText">—</span>
+            </div>
           </div>
         </div>
         <div class="popup-actions-top">
@@ -863,7 +962,7 @@
         <!-- Zakładki: Aktywność GHL | Historia połączeń -->
         <div style="padding: 0 16px; border-bottom: 1px solid #e2e8f0;">
           <div style="display: flex; gap: 0;">
-            <button onclick="switchPatientCardTab('timeline')" id="tabPatientTimeline" class="patient-card-tab active">Aktywność GHL</button>
+            <button onclick="switchPatientCardTab('timeline')" id="tabPatientTimeline" class="patient-card-tab active">Timeline (App + GHL)</button>
             <button onclick="switchPatientCardTab('calls')" id="tabPatientCalls" class="patient-card-tab">Historia połączeń</button>
           </div>
         </div>

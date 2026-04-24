@@ -143,6 +143,7 @@ function showApp() {
 }
 
 function initApp() {
+  startHeartbeat();
   updateClock();
   setInterval(updateClock, 1000);
   connectWebSocket();
@@ -182,13 +183,14 @@ function initApp() {
   }, 300);
 }
 
-// startHeaderClock() usunięta — logika jest już w updateClock()
+// startHeaderClock() usunięta — logika jest w updateClock()
 
 async function loadDashboardData() {
   loadDashboardPool(); // Załaduj pulę zadań na kokpicie
   try {
     // Pobierz statystyki i ostatnie połączenia
-    const statsResp = await fetch('/api/stats?days=1');
+    const uid = currentUser?.id || ''; const rol = currentUser?.role || 'reception';
+    const statsResp = await fetch(`/api/stats?days=1&userId=${uid}&role=${rol}`);
     if (statsResp.ok) {
       const statsData = await statsResp.json();
       updateKPIs(statsData);
@@ -203,7 +205,8 @@ async function loadDashboardData() {
 
   // Pobierz połączenia (aktualizuje kpi-calls i kpi-missed)
   try {
-    const callsResp = await fetch('/api/calls?today=1');
+    const uid2 = currentUser?.id || ''; const rol2 = currentUser?.role || 'reception';
+    const callsResp = await fetch(`/api/calls?today=1&userId=${uid2}&role=${rol2}`);
     if (callsResp.ok) {
       const callsData = await callsResp.json();
       allCalls = callsData.calls || [];
@@ -233,42 +236,69 @@ function updateKPIs(data) {
   // Tutaj aktualizujemy tylko to co pochodzi z /api/stats
   const toCallCount = (stats.missed || 0) + (data.callsByStatus?.ineffective || 0);
   setEl('kpi-to-call', toCallCount);
+  
+  // Nowe metryki operacyjne
+  if (data.stats && data.stats.metrics) {
+    const m = data.stats.metrics;
+    setEl('metric-lead-first', m.leadToFirstCallAvg || '—');
+    setEl('metric-first-w0', m.firstCallToW0Avg || '—');
+    setEl('metric-w0-wait', m.w0WaitAvg || '—');
+    setEl('metric-fu-conv', (data.stats.followUpStats?.conversionToW0 || 0) + '%');
+  }
 }
 
 function updateDashboardLists(calls) {
+  // Zachowaj stary liveFeedList i callbackList dla kompatybilności
   const liveFeedEl = document.getElementById('liveFeedList');
   const callbackEl = document.getElementById('callbackList');
-  if (!liveFeedEl || !callbackEl) return;
-  
-  // ⚡ Live Feed
-  const recent = calls.slice(0, 10);
-  liveFeedEl.innerHTML = recent.length ? recent.map(c => `
-    <div class="live-feed-item">
-      <div class="feed-icon" style="background: ${c.direction === 'inbound' ? '#dbeafe' : '#f1f5f9'}; color: ${c.direction === 'inbound' ? '#3b82f6' : '#64748b'};">
-        ${c.direction === 'inbound' ? '📥' : '📤'}
+  if (liveFeedEl) liveFeedEl.innerHTML = '';
+  if (callbackEl) callbackEl.innerHTML = '';
+
+  // Nowe listy z podziałem
+  loadCallbackList(calls);
+}
+
+function loadCallbackList(callsData) {
+  const missedEl = document.getElementById('callbackMissedList');
+  const ineffectiveEl = document.getElementById('callbackIneffectiveList');
+  const badgeCb = document.getElementById('badge-callback');
+  const badgeMissed = document.getElementById('badge-missed-cb');
+  const badgeIneff = document.getElementById('badge-ineffective-cb');
+  if (!missedEl || !ineffectiveEl) return;
+
+  // Użyj przekazanych danych lub allCalls
+  const calls = callsData && Array.isArray(callsData) ? callsData : allCalls;
+
+  const missed = calls.filter(c => c.tag === 'missed' || c.status === 'missed');
+  const ineffective = calls.filter(c => (c.tag === 'ineffective' || c.status === 'ineffective') && c.direction === 'outbound');
+
+  const renderCallbackItem = (c) => `
+    <div class="callback-item">
+      <div class="callback-item-avatar ${c.tag === 'missed' ? 'avatar-missed' : 'avatar-ineffective'}">
+        ${(c.contactName || c.from || '?')[0].toUpperCase()}
       </div>
-      <div class="feed-content">
-        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
-        <div class="feed-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${c.direction === 'inbound' ? 'Przychodzące' : 'Wychodzące'}</div>
+      <div class="callback-item-info">
+        <div class="callback-item-name">${escHtml(c.contactName || c.from || 'Nieznany')}</div>
+        <div class="callback-item-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · ${new Date(c.timestamp).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}</div>
       </div>
-      <div class="status-badge status-${c.tag || 'connected'}">${c.tag === 'missed' ? 'Nieodebrane' : c.tag === 'ineffective' ? 'Bez odbioru' : 'Połączono'}</div>
+      <button class="btn-callback-call" onclick="initiateCall('${escHtml(c.from || '')}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">
+        &#128222; Oddzwoń
+      </button>
     </div>
-  `).join('') : '<div class="empty-state">Oczekiwanie na aktywność...</div>';
-  
-  // 📞 Lista do oddzwonienia
-  const toCall = calls.filter(c => c.tag === 'missed' || c.tag === 'ineffective').slice(0, 10);
-  callbackEl.innerHTML = toCall.length ? toCall.map(c => `
-    <div class="live-feed-item">
-      <div class="feed-icon" style="background: ${c.tag === 'missed' ? '#fee2e2' : '#fef3c7'}; color: ${c.tag === 'missed' ? '#ef4444' : '#d97706'};">
-        ${c.tag === 'missed' ? '🔴' : '🟡'}
-      </div>
-      <div class="feed-content">
-        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
-        <div class="feed-time">${c.tag === 'missed' ? 'Nieodebrane' : 'Nieskuteczne'} • ${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
-      </div>
-      <button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="initiateCall('${c.from}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">Oddzwoń</button>
-    </div>
-  `).join('') : '<div class="empty-state">Brak pacjentów do kontaktu</div>';
+  `;
+
+  missedEl.innerHTML = missed.length
+    ? missed.slice(0, 15).map(renderCallbackItem).join('')
+    : '<div class="empty-state-sm">Brak nieodebranych</div>';
+
+  ineffectiveEl.innerHTML = ineffective.length
+    ? ineffective.slice(0, 15).map(renderCallbackItem).join('')
+    : '<div class="empty-state-sm">Brak nieskutecznych</div>';
+
+  const total = missed.length + ineffective.length;
+  if (badgeCb) badgeCb.textContent = total;
+  if (badgeMissed) badgeMissed.textContent = missed.length;
+  if (badgeIneff) badgeIneff.textContent = ineffective.length;
 }
 
 let statsDonutChart = null;
@@ -618,10 +648,10 @@ function setUserRole(role) {
   document.querySelectorAll('.reception-only').forEach(el => {
     el.style.display = (role === 'reception' || role === 'opiekun') ? '' : 'none';
   });
-  // Admin: ukryj widok połączeń w sidebarze (punkt 9)
+  // Admin: pokaż widok połączeń (z filtrami stanowisko/osoba)
   const callsMenuItem = document.querySelector('[data-view="calls"]');
   if (callsMenuItem) {
-    callsMenuItem.style.display = role === 'admin' ? 'none' : '';
+    callsMenuItem.style.display = ''; // Widoczne dla wszystkich ról
   }
   // Etykiety przycisków edycji
   document.querySelectorAll('.edit-request-btn').forEach(btn => {
@@ -633,7 +663,10 @@ function setUserRole(role) {
 function startPolling() {
   if (pollingInterval) clearInterval(pollingInterval);
   pollingInterval = setInterval(() => {
-    if (currentView === 'calls') loadCalls();
+    // Nie odświeżaj tabeli połączeń gdy audio jest odtwarzane
+    const audioPlaying = document.querySelector('audio') && 
+      [...document.querySelectorAll('audio')].some(a => !a.paused);
+    if (currentView === 'calls' && !audioPlaying) loadCalls();
     if (currentView === 'dashboard') loadNewLeads();
   }, 30000);
 }
@@ -658,7 +691,8 @@ function connectWebSocket() {
       // Szybszy polling gdy WS rozłączony
       if (pollingInterval) clearInterval(pollingInterval);
       pollingInterval = setInterval(() => {
-        if (currentView === 'calls') loadCalls();
+        const audioPlaying = [...document.querySelectorAll('audio')].some(a => !a.paused);
+        if (currentView === 'calls' && !audioPlaying) loadCalls();
         if (currentView === 'dashboard') loadNewLeads();
       }, 10000);
       setTimeout(connectWebSocket, 5000);
@@ -747,26 +781,37 @@ function handleCallRinging(data) {
 
   if (currentView === 'calls') renderCallsTable(allCalls);
 
-  // Otwórz popup dla połączeń przychodzących
-  if (data.direction === 'inbound') {
-    openCallPopup({
-      id: data.contactId || 'unknown',
-      name: data.contactName || data.from || 'Nieznany',
-      phone: data.from,
-      callId: data.callId,
-      direction: 'inbound'
-    });
-  } else {
-    // Wychodzące — otwórz popup bez dzwonienia
-    openCallPopup({
-      id: data.contactId || 'unknown',
-      name: data.contactName || data.to || 'Nieznany',
-      phone: data.to,
-      callId: data.callId,
-      direction: 'outbound'
-    });
+  // Otwórz popup tylko dla właściwego agenta (po userId)
+  // Admin widzi wszystkie połączenia, ale popup tylko dla swojego ext
+  const myUserId = currentUser?.id;
+  const myRole = currentUser?.role;
+  // Sprawdź czy to połączenie należy do tego użytkownika
+  // data.userId jest ustawiane przez serwer na podstawie activeExtMap
+  const isMyCall = !data.userId || // stare połączenia bez userId → pokaż wszystkim recepcji
+    data.userId === myUserId ||     // moje połączenie
+    myRole === 'admin';             // admin widzi wszystko
+
+  if (isMyCall) {
+    if (data.direction === 'inbound') {
+      openCallPopup({
+        id: data.contactId || 'unknown',
+        name: data.contactName || data.from || 'Nieznany',
+        phone: data.from,
+        callId: data.callId,
+        direction: 'inbound'
+      });
+    } else {
+      // Wychodzące — otwórz popup bez dzwonienia
+      openCallPopup({
+        id: data.contactId || 'unknown',
+        name: data.contactName || data.to || 'Nieznany',
+        phone: data.to,
+        callId: data.callId,
+        direction: 'outbound'
+      });
+    }
+    activeCallId = data.callId;
   }
-  activeCallId = data.callId;
 }
 
 function handleCallAnswered(data) {
@@ -848,7 +893,15 @@ function switchView(view) {
   currentView = view;
 
   if (view === 'contacts') loadContacts();
-  if (view === 'calls') loadCalls();
+  if (view === 'calls') {
+    loadCalls();
+    // Pokaż/ukryj filtry admina
+    const isAdm = currentUser?.role === 'admin';
+    const stEl = document.getElementById('admin-filter-station');
+    const agEl = document.getElementById('admin-filter-agent');
+    if (stEl) stEl.style.display = isAdm ? 'flex' : 'none';
+    if (agEl) agEl.style.display = isAdm ? 'flex' : 'none';
+  }
   if (view === 'stats') loadAndRenderStats();
   if (view === 'tasks') loadTasks();
 }
@@ -946,19 +999,10 @@ function renderLeadsList(leads) {
   const allSources = [...new Set(leads.flatMap(l => [...(l.tags || []), l.source].filter(Boolean)))];
   renderSourceFilters(allSources);
 
-  // Ustaw kontener na rzędy
-  listEl.style.display = 'flex';
-  listEl.style.flexDirection = 'column';
-  listEl.style.gap = '12px';
   
   listEl.innerHTML = '';
   filtered.forEach(lead => {
     const card = createLeadCard(lead);
-    // Dostosuj kartę do układu rzędowego
-    card.style.display = 'flex';
-    card.style.alignItems = 'center';
-    card.style.width = '100%';
-    card.style.padding = '12px 20px';
     listEl.appendChild(card);
   });
 }
@@ -1006,56 +1050,86 @@ function getLeadAgeLabel(createdAt) {
   const ageMin = Math.floor(ageMs / 60000);
   const ageH = Math.floor(ageMin / 60);
   const ageM = ageMin % 60;
-
-  let cls = 'age-ok';
-  let label = ageMin < 60 ? `${ageMin} min` : `${ageH}h ${ageM}m`;
-
-  if (ageMin >= 15 && ageMin < 120) cls = 'age-warn';
-  if (ageMin >= 120) { cls = 'age-critical'; }
-
-  return `<span class="lead-age ${cls}">${label}</span>`;
+  const exactTime = ageMin < 60 ? `${ageMin} min` : `${ageH}h ${ageM}m`;
+  let cls, icon, label;
+  if (ageMin < 15) {
+    cls = 'age-ok';
+    icon = '\uD83D\uDFE2'; // 🟢 zielone koło
+    label = 'Świeże';
+  } else if (ageMin < 120) {
+    cls = 'age-warn';
+    icon = '\uD83D\uDFE1'; // 🟡 żółte koło
+    label = 'Oczekuje';
+  } else {
+    cls = 'age-critical';
+    icon = '\uD83D\uDD34'; // 🔴 czerwone koło
+    label = 'Pilne';
+  }
+  return `<span class="lead-age ${cls}" title="Czas oczekiwania: ${exactTime}">${icon} ${label}</span>`;
 }
 
 function createLeadCard(lead) {
   const div = document.createElement('div');
-  div.className = 'lead-card';
-  div.style.display = 'flex';
-  div.style.alignItems = 'center';
-  div.style.gap = '20px';
-  div.style.padding = '12px 24px';
+  div.className = 'lead-card-v2';
 
   const sourceTags = [...new Set([...(lead.tags || []), lead.source].filter(Boolean))];
   const sourceTagsHtml = sourceTags.map(t => getSourceLabel(t)).join('');
   const ageHtml = getLeadAgeLabel(lead.createdAt);
-  const stageHtml = lead.stageName
-    ? `<span class="lead-stage-tag" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(lead.stageName)}</span>`
+  const isAdmin = currentUserRole === 'admin';
+
+  // Awatar — inicjały z kolorem zależnym od źródła
+  const initials = (lead.name || 'P').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const avatarColors = [
+    ['#dbeafe','#1d4ed8'], ['#dcfce7','#15803d'], ['#fce7f3','#be185d'],
+    ['#fef3c7','#92400e'], ['#ede9fe','#6d28d9'], ['#ffedd5','#c2410c']
+  ];
+  const colorIdx = (lead.name || 'P').charCodeAt(0) % avatarColors.length;
+  const [bgColor, textColor] = avatarColors[colorIdx];
+
+  // Numer telefonu
+  const phoneDisplay = lead.phone
+    ? `<span class="lc-phone">&#128222; ${escHtml(lead.phone)}</span>`
+    : `<span class="lc-phone lc-no-phone">Brak numeru</span>`;
+
+  // ID
+  const idDisplay = lead.id ? `<span class="lc-id">ID: #${String(lead.id).slice(-4)}</span>` : '';
+
+  // Problem pacjenta
+  const problemHtml = lead.zglosza
+    ? `<div class="lc-problem"><span class="lc-problem-label">PROBLEM PACJENTA</span><div class="lc-problem-text">${escHtml(lead.zglosza)}</div></div>`
     : '';
-  const phoneHtml = lead.phone
-    ? `<div class="lead-phone" style="font-weight:600; color:#3b82f6;">📞 ${lead.phone}</div>`
-    : `<div class="lead-phone no-phone" style="color:#94a3b8;">Brak numeru</div>`;
+
+  // Przyciski — Zadzwoń dla wszystkich, Raport i Usuń tylko dla admina
+  const callBtn = lead.phone
+    ? `<button class="lc-btn-call" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">&#128222; Zadzwoń</button>`
+    : '';
+  const reportBtn = isAdmin
+    ? `<button class="lc-btn-report" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">&#128203; Raport</button>`
+    : '';
+  const deleteBtn = isAdmin
+    ? `<button class="lc-btn-delete" onclick="deleteLead('${lead.id}', this)">&#10005; Usuń</button>`
+    : '';
 
   div.innerHTML = `
-    <div class="lead-avatar" style="width:40px; height:40px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-weight:700; color:#475569; flex-shrink:0;">
-      ${(lead.name || 'P').charAt(0).toUpperCase()}
-    </div>
-    <div class="lead-info" style="flex:1; display:flex; align-items:center; gap:24px;">
-      <div style="min-width:180px;">
-        <div class="lead-name" style="font-weight:700; color:#1e293b; font-size:15px;">${escHtml(lead.name)}</div>
-        <div style="display:flex; gap:6px; margin-top:4px;">${stageHtml}${ageHtml}</div>
+    <div class="lc-header">
+      <div class="lc-avatar" style="background:${bgColor}; color:${textColor};">${initials}</div>
+      <div class="lc-name-row">
+        <span class="lc-name">${escHtml(lead.name || 'Nieznany')}</span>
+        ${sourceTagsHtml}
       </div>
-      <div style="min-width:140px;">${phoneHtml}</div>
-      <div style="flex:1; min-width:0;">
-        ${lead.zglosza
-          ? `<div style="font-size:13px; color:#1e293b; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; padding:4px 10px; background:#f0f9ff; border-left:3px solid #3b82f6; border-radius:0 6px 6px 0;" title="${escHtml(lead.zglosza)}">"​${escHtml(lead.zglosza)}"</div>`
-          : '<div style="font-size:12px;color:#cbd5e1;">Brak opisu</div>'}
-      </div>
-      <div style="display:flex; gap:4px;">${sourceTagsHtml}</div>
+      <div class="lc-age">${ageHtml}</div>
     </div>
-    <div class="lead-actions" style="display:flex; gap:8px; flex-shrink:0;">
-      ${lead.phone ? `<button class="btn-call" style="padding:6px 12px;" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">📞</button>` : ''}
-      <button class="btn-report" style="padding:6px 12px; font-size:12px;" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">📋 Raport</button>
-      <button class="btn-edit edit-request-btn" style="padding:6px 12px; font-size:12px;" onclick="openEditRequest('${lead.contactId}', '${escHtml(lead.name)}')">✏️</button>
-      <button class="btn-delete admin-only" style="display:${currentUserRole === 'admin' ? 'inline-flex' : 'none'}; padding:6px 12px;" onclick="deleteLead('${lead.id}', this)">✕</button>
+    ${problemHtml}
+    <div class="lc-footer">
+      <div class="lc-meta">
+        ${phoneDisplay}
+        ${idDisplay}
+      </div>
+      <div class="lc-actions">
+        ${reportBtn}
+        ${deleteBtn}
+        ${callBtn}
+      </div>
     </div>
   `;
   return div;
@@ -1090,7 +1164,7 @@ function escHtml(str) {
 }
 
 // ==================== CALLS — BLOK C ====================
-// UWAGA: loadCalls() jest zdefiniowana niżej — wersja z /api/calls/history (z raportami i nagraniami)
+// loadCalls() → pełna wersja z filtrami i /api/calls/history jest zdefiniowana niżej
 
 function renderCallsTable(calls) {
   const container = document.getElementById('callsFeed');
@@ -1111,32 +1185,79 @@ function renderCallsTable(calls) {
     return true;
   });
 
-  container.innerHTML = `
+  // Admin: filtr po stanowisku/osobie
+  const isAdmin = currentUser?.role === 'admin';
+  const activeStation = document.getElementById('filter-station')?.value || 'all';
+  const activeAgent   = document.getElementById('filter-agent')?.value || 'all';
+  
+  let finalFiltered = filtered;
+  if (isAdmin) {
+    if (activeStation !== 'all') {
+      const extMap = { reception: '103', agata_o: '101', aneta_o: '102' };
+      const ext = extMap[activeStation];
+      if (ext) finalFiltered = finalFiltered.filter(c => {
+        const from = String(c.from || ''); const to = String(c.to || '');
+        return from === ext || to === ext || from.endsWith(ext) || to.endsWith(ext) || c.userId === activeStation;
+      });
+    }
+    if (activeAgent !== 'all') {
+      finalFiltered = finalFiltered.filter(c => c.userId === activeAgent);
+    }
+  } else {
+    finalFiltered = filtered;
+  }
+
+  // Admin filter bar
+  const adminFilterBar = isAdmin ? `
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 0;flex-wrap:wrap;">
+      <label style="font-size:12px;font-weight:600;color:#64748b;">Stanowisko:</label>
+      <select id="filter-station" onchange="renderCallsTable(allCalls)" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;">
+        <option value="all">Wszystkie</option>
+        <option value="reception">📞 Recepcja (103)</option>
+        <option value="agata_o">👤 Agata Opiekun (101)</option>
+        <option value="aneta_o">👤 Aneta Opiekun (102)</option>
+      </select>
+      <label style="font-size:12px;font-weight:600;color:#64748b;">Osoba:</label>
+      <select id="filter-agent" onchange="renderCallsTable(allCalls)" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;">
+        <option value="all">Wszyscy</option>
+        <option value="kasia">Kasia</option>
+        <option value="agnieszka">Agnieszka</option>
+        <option value="asia">Asia</option>
+        <option value="agata_r">Agata (Rec.)</option>
+        <option value="zastepstwo">Zastępstwo</option>
+        <option value="agata_o">Agata Opiekun</option>
+        <option value="aneta_o">Aneta Opiekun</option>
+      </select>
+    </div>` : '';
+
+  container.innerHTML = adminFilterBar + `
     <table class="calls-table">
       <thead>
         <tr>
           <th>Pacjent / Numer</th>
           <th>Status pacjenta</th>
-          <th>Program</th>
           <th>Kierunek</th>
           <th>Połączenie</th>
           <th>Wynik rozmowy</th>
-          <th>Czas</th>
+          <th>Data</th>
+          <th>Godzina</th>
+          <th>Czas trwania</th>
+          ${isAdmin ? '<th>Agent</th>' : ''}
           <th>Rozmowa</th>
           <th>Nagranie</th>
           <th>Akcje</th>
         </tr>
       </thead>
       <tbody>
-        ${filtered.map(c => renderCallRow(c)).join('')}
+        ${finalFiltered.map(c => renderCallRow(c, isAdmin)).join('')}
       </tbody>
     </table>
   `;
 }
 
-function renderCallRow(c) {
+function renderCallRow(c, isAdmin = false) {
   const ts = c.timestamp ? new Date(c.timestamp) : null;
-  const date = ts ? ts.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' }) : '';
+  const date = ts ? ts.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const time = ts ? ts.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
   const dur = c.duration ? formatDuration(c.duration) : '—';
   const dirIcon = c.direction === 'outbound' ? '📤' : '📞';
@@ -1153,17 +1274,34 @@ function renderCallRow(c) {
   const noteHtml = c.notes
     ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(c.notes)}">${escHtml(c.notes)}</div>` : '';
 
-  // Nagranie (D1)
+  // Nagranie (D1) — używa proxy do pobierania świeżego linka z Zadarma
+  const proxyUrl = `/api/call/${encodeURIComponent(c.callId)}/recording/proxy`;
   const recHtml = c.recordingUrl
-    ? `<audio controls src="${c.recordingUrl}" class="call-recording-player"></audio>
-       <a href="${c.recordingUrl}" download class="btn-download-rec" title="Pobierz">↓</a>`
+    ? `<audio controls src="${proxyUrl}" class="call-recording-player"></audio>
+       <a href="${proxyUrl}" target="_blank" class="btn-download-rec" title="Pobierz">↓</a>`
     : c.tag === 'connected'
       ? `<span data-rec-callid="${escHtml(c.callId)}" class="btn-rec-pending" title="Nagranie pojawi się po zakończeniu przetwarzania">⏳ Oczekuje...</span>`
       : `<button class="btn-fetch-rec" onclick="fetchRecording('${c.callId}', this)" title="Sprawdź nagranie">▶ Sprawdź</button>`;
 
   // Kto obsługiwał
-  const agentHtml = c.userId
-    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(c.userId)}</div>` : '';
+  // Agent name mapping
+  const agentNames = {
+    kasia: 'Kasia', agnieszka: 'Agnieszka', asia: 'Asia', agata_r: 'Agata (Rec.)',
+    zastepstwo: 'Zastępstwo', agata_o: 'Agata Opiekun', aneta_o: 'Aneta Opiekun',
+    bartosz: 'Bartosz', sandra: 'Sandra', aneta_a: 'Aneta (A)', patrycja: 'Patrycja', sonia: 'Sonia'
+  };
+  const agentName = c.userId ? (agentNames[c.userId] || c.userId) : null;
+  const agentHtml = agentName
+    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(agentName)}</div>` : '';
+  // Agent role tag for admin column
+  const agentRoles = { agata_o: 'opiekun', aneta_o: 'opiekun' };
+  const agentRole = c.userId ? (agentRoles[c.userId] || 'reception') : null;
+  const agentTagHtml = agentName
+    ? `<div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:12px;font-weight:600;color:#1e293b;">👤 ${escHtml(agentName)}</span>
+        <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${agentRole === 'opiekun' ? '#dbeafe' : '#dcfce7'};color:${agentRole === 'opiekun' ? '#1d4ed8' : '#166534'};font-weight:600;">${agentRole === 'opiekun' ? 'Opiekun' : 'Recepcja'}</span>
+       </div>`
+    : '<span style="color:#94a3b8;font-size:11px;">—</span>';
 
   // Etap lejka
   const stageHtml = getStageTagHtml(c.stageId, c.stageName);
@@ -1207,18 +1345,13 @@ function renderCallRow(c) {
         </div>
       </td>
       <td>${contactTypeHtml}</td>
-      <td>${programHtml}</td>
       <td><span style="font-size:13px;">${dirIcon}</span> <span style="font-size:12px;color:#64748b;">${dirLabel}</span></td>
       <td>${tagHtml}</td>
       <td>${reportStatusHtml}</td>
-      <td>
-        <div style="font-size:13px;font-weight:600;color:#1e293b;">${time}</div>
-        <div style="font-size:11px;color:#94a3b8;">${date}</div>
-      </td>
-      <td>
-        <div style="font-size:13px;font-weight:600;color:#1e293b;">${dur}</div>
-        ${agentHtml}
-      </td>
+      <td><div style="font-size:13px;font-weight:600;color:#1e293b;">${date}</div></td>
+      <td><div style="font-size:13px;font-weight:600;color:#1e293b;">${time}</div></td>
+      <td><div style="font-size:13px;font-weight:600;color:#1e293b;">${dur}</div></td>
+      ${isAdmin ? `<td onclick="event.stopPropagation()">${agentTagHtml}</td>` : ''}
       <td onclick="event.stopPropagation()">${recHtml}</td>
       <td onclick="event.stopPropagation()">
         <div style="display:flex;flex-direction:column;gap:4px;">
@@ -1277,11 +1410,12 @@ async function fetchRecording(callId, btn) {
     if (data.url) {
       const idx = allCalls.findIndex(c => c.callId === callId);
       if (idx >= 0) allCalls[idx].recordingUrl = data.url;
+      const proxyUrl = `/api/call/${encodeURIComponent(callId)}/recording/proxy`;
       // Zaktualizuj tylko komórkę — bez przeładowania całej tabeli
       const cell = btn.closest('td');
       if (cell) {
-        cell.innerHTML = `<audio controls src="${data.url}" class="call-recording-player"></audio>
-          <a href="${data.url}" download class="btn-download-rec" title="Pobierz">↓</a>`;
+        cell.innerHTML = `<audio controls src="${proxyUrl}" class="call-recording-player"></audio>
+          <a href="${proxyUrl}" target="_blank" class="btn-download-rec" title="Pobierz">↓</a>`;
       }
       showToast('🎙️ Nagranie gotowe', 'success');
     } else {
@@ -1371,12 +1505,13 @@ async function openCallReport(callId) {
 function updatePopupRecording(url, callId) {
   const recContainer = document.getElementById('popupRecordingSection');
   if (!recContainer) return;
-  if (url) {
+  if (url && callId) {
+    const proxyUrl = `/api/call/${encodeURIComponent(callId)}/recording/proxy`;
     recContainer.innerHTML = `
       <div style="margin-top:8px;padding:10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
         <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:6px;">🎙️ Nagranie rozmowy</div>
-        <audio controls src="${url}" style="width:100%;height:36px;"></audio>
-        <a href="${url}" download style="font-size:11px;color:#3b82f6;margin-top:4px;display:inline-block;">⬇ Pobierz</a>
+        <audio controls src="${proxyUrl}" style="width:100%;height:36px;"></audio>
+        <a href="${proxyUrl}" target="_blank" style="font-size:11px;color:#3b82f6;margin-top:4px;display:inline-block;">⬇ Pobierz</a>
       </div>`;
     recContainer.style.display = '';
   } else if (callId) {
@@ -1431,7 +1566,6 @@ async function initiateCall(phone, name, contactId, oppId) {
 }
 
 // ==================== CALL POPUP (C6/C7/C8) ====================
-
 function openCallPopup(contact) {
   currentContact = contact;
 
@@ -1463,6 +1597,17 @@ function openCallPopup(contact) {
     const zBox = document.getElementById('popupZCzymSieZglasza');
     if (zBox) zBox.classList.add('hidden');
     if (contact.id && contact.id !== 'unknown') fetchContactZglosza(contact.id);
+  }
+  // Wyczyść i załaduj wzbogacone dane popupu (etap GHL, W0, ostatnia notatka)
+  const enrichSection = document.getElementById('popupEnrichSection');
+  if (enrichSection) { enrichSection.classList.add('hidden'); enrichSection.style.display = 'none'; }
+  ['popupStageRow','popupW0Row','popupLastNoteRow'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  if (contact.id && contact.id !== 'unknown') {
+    // Pobierz wzbogacone dane asynchronicznie (nie blokuje otwarcia popupu)
+    fetchPopupEnrichment(contact.id);
   }
 
   // Ustawienie nazwy pacjenta w polu manualnym (jeśli mamy ją z obiektu połączenia)
@@ -1553,6 +1698,67 @@ async function fetchContactZglosza(contactId) {
   } catch (err) { console.error('Fetch zglosza error:', err); }
 }
 
+async function fetchPopupEnrichment(contactId) {
+  try {
+    const response = await fetch(`/api/contact/${contactId}/popup`);
+    if (!response.ok) return;
+    const data = await response.json();
+    const enrichSection = document.getElementById('popupEnrichSection');
+    if (!enrichSection) return;
+    enrichSection.classList.remove('hidden');
+    enrichSection.style.display = 'flex';
+    // Etap GHL
+    if (data.stageName) {
+      const stageRow = document.getElementById('popupStageRow');
+      const stageName = document.getElementById('popupStageName');
+      if (stageRow) stageRow.classList.remove('hidden');
+      if (stageName) stageName.textContent = data.stageName;
+    }
+    // W0
+    if (data.w0_scheduled && data.w0_date) {
+      const w0Row = document.getElementById('popupW0Row');
+      const w0Info = document.getElementById('popupW0Info');
+      if (w0Row) w0Row.classList.remove('hidden');
+      if (w0Info) {
+        const w0DateStr = new Date(data.w0_date).toLocaleDateString('pl-PL', { day: '2-digit', month: 'short', year: 'numeric' });
+        w0Info.textContent = `${w0DateStr}${data.w0_doctor ? ` — dr ${data.w0_doctor}` : ''}`;
+      }
+      // Aktualizuj blokadę W0 w raporcie
+      if (currentContact) currentContact.w0_scheduled = true;
+      const w0Notice = document.getElementById('w0BlockNotice');
+      const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
+      if (w0Notice && newPatientTile) {
+        w0Notice.classList.remove('hidden');
+        newPatientTile.style.opacity = '0.4';
+        newPatientTile.style.cursor = 'not-allowed';
+        newPatientTile.title = 'Ten pacjent ma już zaplanowane W0';
+      }
+    }
+    // Ostatnia notatka
+    if (data.lastNote?.text) {
+      const noteRow = document.getElementById('popupLastNoteRow');
+      const noteText = document.getElementById('popupLastNoteText');
+      if (noteRow) noteRow.classList.remove('hidden');
+      if (noteText) noteText.textContent = data.lastNote.text.slice(0, 120) + (data.lastNote.text.length > 120 ? '…' : '');
+    }
+    // Uzupełnij zglosza jeśli nie było
+    if (data.zglosza) {
+      const zEl = document.getElementById('popupZglosza');
+      if (zEl && (!zEl.textContent || zEl.textContent === '—')) zEl.textContent = data.zglosza;
+      const zBox = document.getElementById('popupZCzymSieZglasza');
+      if (zBox) zBox.classList.remove('hidden');
+    }
+    // Aktualizuj currentContact z danymi z popup
+    if (currentContact && data.opportunityId) {
+      currentContact.opportunityId = data.opportunityId;
+      if (!currentOpportunity) currentOpportunity = { id: data.opportunityId };
+    }
+    if (currentContact) {
+      currentContact.lead_created_at = currentContact.lead_created_at || data.lead_created_at;
+    }
+  } catch (err) { console.error('[Popup Enrichment] Error:', err); }
+}
+
 function answerCall() {
   // Potwierdź odebranie — uruchom timer od teraz
   const tagEl = document.getElementById('popupCallTag');
@@ -1592,24 +1798,48 @@ function calculateDelayInDays(targetDateStr) {
 }
 
 function closeCallPopup(force = false) {
-  // Ostrzeżenie jeśli raport nieuzupełniony (punkt 6)
+  // Sprawdź czy połączenie jest aktywne (dzwoni lub trwa)
+  const callInStore = activeCallId ? allCalls.find(c => c.callId === activeCallId) : null;
+  const isCallActive = callInStore && (callInStore.status === 'ringing' || callInStore.status === 'active');
+
+  // Jeśli połączenie aktywne i nie wymuszamy zamknięcia → minimalizuj zamiast zamykać
+  if (!force && isCallActive) {
+    minimizeCallPopup();
+    return;
+  }
+
+  // Ostrzeżenie jeśli raport nieuzupełniony (punkt 6) — tylko dla zakończonych połączeń
   if (!force && activeCallId && !selectedStatus) {
-    const callInStore = allCalls.find(c => c.callId === activeCallId);
-    // Tylko dla zakończonych połączeń, które trwały (nie missed/ineffective)
-    if (callInStore?.tag === 'connected' || callInStore?.status === 'active') {
+    if (callInStore?.tag === 'connected') {
       if (!confirm('⚠️ Raport nieuzupełniony — czy na pewno chcesz wyjść?\n\nMożesz wrócić do raportu z widoku Połączenia.')) {
         return;
       }
-      // Dodaj do listy niedokończonych raportów
       addPendingReport(activeCallId, callInStore?.contactName || callInStore?.from);
     }
   }
   document.getElementById('callPopup').classList.add('hidden');
+  const popup = document.getElementById('callPopup');
+  if (popup) popup.classList.remove('minimized');
   stopCallTimer();
   currentContact = null;
   selectedStatus = null;
   selectedOutcome = null;
   activeCallId = null;
+}
+
+// Minimalizuj popup połączenia (widoczny jako pasek na dole)
+function minimizeCallPopup() {
+  const popup = document.getElementById('callPopup');
+  if (!popup) return;
+  popup.classList.add('minimized');
+  showToast('Połączenie aktywne — kliknij pasek aby wrócić', 'info');
+}
+
+// Przywróć popup z minimalizacji
+function restoreCallPopup() {
+  const popup = document.getElementById('callPopup');
+  if (!popup) return;
+  popup.classList.remove('minimized');
 }
 
 // Lista niedokończonych raportów (punkt 6 — przypomnienia)
@@ -1677,23 +1907,16 @@ function resetReportForm() {
   selectedStatus = null;
   selectedOutcome = null;
   // Wyczyść wszystkie pola formularza raportu
-  const fieldIds = [
-    'programLeczenia', 'dataW0', 'contactDateTime', 'powodRezygnacji',
-    'powodZmiany', 'nowyTermin', 'powodOdwolania', 'wizytaContactDateTime',
-    'stalyNotatka', 'stalyDataWizyty', 'stalyContactDateTime', 'spamNotatka',
-    'manualPatientName'
-  ];
-  fieldIds.forEach(id => {
+  ['programLeczenia', 'dataW0', 'contactDateTime', 'powodRezygnacji',
+   'powodZmiany', 'nowyTermin', 'powodOdwolania', 'wizytaContactDateTime',
+   'stalyNotatka', 'stalyDataWizyty', 'stalyContactDateTime', 'spamNotatka',
+   'manualPatientName'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) {
-      if (el.tagName === 'SELECT') el.selectedIndex = 0;
-      else el.value = '';
-    }
+    if (el) { if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = ''; }
   });
-  // Ukryj sekcję nagrania w popup
+  // Ukryj sekcję nagrania i blokadę W0
   const recSection = document.getElementById('popupRecordingSection');
   if (recSection) recSection.style.display = 'none';
-  // Ukryj blokadę W0
   const w0Notice = document.getElementById('w0BlockNotice');
   if (w0Notice) w0Notice.classList.add('hidden');
   const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
@@ -2143,23 +2366,36 @@ function renderTasksList(el, tasks, isMyTasks = false, isPool = false) {
     const dueDateStr = t.dueDate ? new Date(t.dueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Bez terminu';
 
     return `
-    <div class="task-item ${isCompleted ? 'task-completed' : ''}" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #f1f5f9; ${isCompleted ? 'opacity:0.5;' : ''}">
+    <div class="task-item ${t.status === 'done' ? 'task-completed' : ''} ${isPool ? 'pool-task' : ''}" 
+         id="task-${t.id}"
+         style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #f1f5f9; ${t.status === 'done' ? 'opacity:0.6;' : ''}">
       <div style="flex:1;">
-        <div style="font-weight:600; color:#1e293b; ${isCompleted ? 'text-decoration:line-through;' : ''}">${escHtml(t.title)}</div>
-        <div style="font-size:12px; color:#64748b; margin-top:2px;">
-          ${t.contactName ? escHtml(t.contactName) + ' • ' : ''}${dueDateStr}
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="font-weight:700; color:#1e293b; ${t.status === 'done' ? 'text-decoration:line-through;' : ''}">${escHtml(t.title)}</div>
+          ${t.task_type === 'follow_up_call' ? '<span style="font-size:10px; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:4px; font-weight:700;">FOLLOW-UP</span>' : ''}
         </div>
-        <div style="margin-top:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        <div style="font-size:13px; color:#475569; margin-top:2px; font-weight:500;">
+          ${t.contactName ? `👤 <strong>${escHtml(t.contactName)}</strong>` : ''} 
+          ${t.phone ? ` • 📞 <a href="tel:${t.phone}" style="color:#3b82f6; text-decoration:none;">${escHtml(t.phone)}</a>` : ''}
+        </div>
+        <div style="font-size:12px; color:#64748b; margin-top:4px; display:flex; align-items:center; gap:8px;">
+          <span>📅 Termin: <strong>${dueDateStr}</strong></span>
+          ${t.status === 'pending' && new Date(t.dueDate) < new Date() ? '<span style="color:#ef4444; font-weight:700;">[PO TERMINIE]</span>' : ''}
+        </div>
+        <div style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
           <span style="font-size:11px; padding:2px 8px; border-radius:10px; background:${assignedColor}15; color:${assignedColor}; border:1px solid ${assignedColor}40; font-weight:600;">
-            👤 ${escHtml(assignedLabel)}
+            ${isPool ? '📥 W PULI' : `👤 ${escHtml(assignedLabel)}`}
           </span>
-          ${t.createdBy ? `<span style="font-size:10px; color:#94a3b8;">utworzył: ${escHtml(t.createdBy)}</span>` : ''}
+          ${t.description ? `<div style="font-size:11px; color:#64748b; background:#f1f5f9; padding:2px 8px; border-radius:4px; width:100%; margin-top:4px;">📝 ${escHtml(t.description)}</div>` : ''}
         </div>
       </div>
-      <div style="display:flex; gap:8px; flex-shrink:0;">
-        ${isPool ? `<button class="btn-primary" style="padding:6px 14px; font-size:12px; border-radius:8px;" onclick="claimTask('${t.id}')">✅ Biorę to</button>` : ''}
-        ${!isPool && !isCompleted ? `<button class="btn-done-task" onclick="completeTask('${t.id}', this)" style="padding:6px 14px; font-size:12px; background:#10b981; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">✓ Zrobione</button>` : ''}
-        ${isCompleted ? '<span style="font-size:11px; color:#10b981; font-weight:600;">✓ Wykonane</span>' : ''}
+      <div style="display:flex; flex-direction:column; gap:6px; flex-shrink:0;">
+        ${isPool ? `<button class="btn-primary" style="padding:8px 16px; font-size:13px; border-radius:8px; font-weight:700;" onclick="claimTask('${t.id}')">✅ Biorę to</button>` : ''}
+        ${!isPool && t.status !== 'done' ? `
+          <button class="btn-done-task" onclick="completeTask('${t.id}', this)" style="padding:6px 14px; font-size:12px; background:#10b981; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:700;">✓ Zrobione</button>
+          <button class="btn-secondary" onclick="rejectTask('${t.id}')" style="padding:4px 10px; font-size:11px; background:#fee2e2; color:#b91c1c; border:none; border-radius:6px; cursor:pointer;">Odrzuć</button>
+        ` : ''}
+        ${t.status === 'done' ? '<span style="font-size:12px; color:#10b981; font-weight:700; text-align:right;">✓ WYKONANE</span>' : ''}
       </div>
     </div>`;
   }).join('');
@@ -2714,7 +2950,8 @@ async function loadAndRenderStats() {
   try {
     const range = document.getElementById('statsRange')?.value || 'today';
     const days = range === 'today' ? 1 : range === 'week' ? 7 : 30;
-    const r = await fetch(`/api/stats?days=${days}`);
+    const uid3 = currentUser?.id || ''; const rol3 = currentUser?.role || 'reception';
+    const r = await fetch(`/api/stats?days=${days}&userId=${uid3}&role=${rol3}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     updateStatCards(data);
@@ -2842,7 +3079,7 @@ function appendChatMessage(from, text, ts, isMine) {
 function renderCharts(statsData) {
   // Jeśli brak danych, pobierz najpierw
   if (!statsData) {
-    fetch('/api/stats').then(r => r.json()).then(d => renderCharts(d)).catch(() => renderCharts({}));
+    { const uid4 = currentUser?.id || ''; const rol4 = currentUser?.role || 'reception'; fetch(`/api/stats?userId=${uid4}&role=${rol4}`).then(r => r.json()).then(d => renderCharts(d)).catch(() => renderCharts({})); }
     return;
   }
   renderDonutChart(statsData);
@@ -2929,6 +3166,40 @@ function updateStatCards(data) {
 
   // Czas trwania
   setEl('stat-avg-duration', `${mins}:${String(secs).padStart(2,'0')}`);
+
+  // Podział per stanowisko (tylko admin)
+  if (currentUser?.role === 'admin' && data.agentBreakdown) {
+    const breakdownEl = document.getElementById('agentBreakdownSection');
+    if (breakdownEl) {
+      breakdownEl.innerHTML = `
+        <h3 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 12px 0;">📊 Podział połączeń per stanowisko</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;">
+          ${data.agentBreakdown.map(st => `
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+              <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">${st.label} <span style="font-size:11px;color:#94a3b8;">(${st.ext})</span></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="font-size:12px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:600;">✅ ${st.connected} odebranych</span>
+                <span style="font-size:12px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:6px;font-weight:600;">❌ ${st.missed} nieodebranych</span>
+                <span style="font-size:12px;background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:6px;font-weight:600;">⚡ ${st.ineffective} nieskutecznych</span>
+              </div>
+              ${st.agents.length > 0 ? `
+                <div style="font-size:11px;color:#64748b;margin-top:6px;font-weight:600;">Osoby:</div>
+                ${st.agents.map(a => `
+                  <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #f1f5f9;">
+                    <span>👤 ${a.name}</span>
+                    <span style="color:#64748b;">${a.calls} poł. (${a.connected} ✅ / ${a.missed} ❌)</span>
+                  </div>`).join('')}
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+      breakdownEl.style.display = '';
+    }
+  } else {
+    const breakdownEl = document.getElementById('agentBreakdownSection');
+    if (breakdownEl) breakdownEl.style.display = 'none';
+  }
 
   // Powody odwołań
   const cancList = document.getElementById('cancellationReasonsList');
@@ -3289,8 +3560,9 @@ function startRecordingPoller(callId) {
         // Odśwież przycisk nagrania inline (bez przeładowania całej tabeli)
         const btn = document.querySelector(`[data-rec-callid="${CSS.escape(callId)}"]`);
         if (btn) {
-          btn.outerHTML = `<audio controls src="${data.url}" class="call-recording-player"></audio>
-            <a href="${data.url}" download class="btn-download-rec" title="Pobierz">↓</a>`;
+          const proxyUrl = `/api/call/${encodeURIComponent(callId)}/recording/proxy`;
+          btn.outerHTML = `<audio controls src="${proxyUrl}" class="call-recording-player"></audio>
+            <a href="${proxyUrl}" target="_blank" class="btn-download-rec" title="Pobierz">↓</a>`;
         }
         showToast('🎙️ Nagranie gotowe', 'success');
       }
@@ -3437,7 +3709,7 @@ function showToast(message, type = 'info') {
 }
 
 // ==================== KPI UPDATES ====================
-// updateKPIs(data) jest zdefiniowane wyżej — ta sekcja celowo usunięta aby nie nadpisywać działającej wersji
+// updateKPIs(data) jest zdefiniowana wyżej — nie nadpisywać pustym placeholderem
 
 
 // ==================== PATIENT CARD ====================
@@ -3510,24 +3782,51 @@ async function openPatientCard(contactId, contactName) {
       marketingEl.style.color = contact.marketingConsent ? '#10b981' : '#ef4444';
     }
     
-    // Wypełnij timeline GHL (zakładka 1)
-    const timeline = data.timeline || [];
+    // Wypełnij ujednolicony Timeline (zakładka 1)
+    const unifiedTimeline = data.unifiedTimeline || [];
+    const legacyTimeline = data.timeline || [];
     const callHistory = data.callHistory || [];
     const timelineEl = document.getElementById('patientCardTimeline');
     
-    if (timeline.length === 0) {
-      timelineEl.innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Brak aktywności GHL</div>';
+    const allEvents = unifiedTimeline.length > 0 ? unifiedTimeline : legacyTimeline.map(a => ({
+      id: a.id, type: a.type, source: 'ghl', description: a.description || a.type,
+      createdAt: a.createdAt, userId: a.userId, userName: a.userName
+    }));
+    
+    const EVENT_COLORS = {
+      visit_cancelled: '#ef4444', follow_up_created: '#f59e0b', first_call: '#3b82f6',
+      w0_scheduled: '#10b981', ghl_note: '#8b5cf6', task_assigned: '#f97316', other: '#94a3b8'
+    };
+    const EVENT_LABELS = {
+      visit_cancelled: 'Odwołanie wizyty', follow_up_created: 'Follow-up', first_call: 'Pierwszy kontakt',
+      w0_scheduled: 'W0 umówione', ghl_note: 'Notatka GHL', task_assigned: 'Zadanie', other: 'Zdarzenie'
+    };
+    
+    if (allEvents.length === 0) {
+      timelineEl.innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Brak zdarzeń w historii</div>';
     } else {
-      timelineEl.innerHTML = timeline.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(activity => `
-        <div style="padding: 12px; border-left: 3px solid #3b82f6; background: #f8fafc; border-radius: 6px; margin-bottom: 8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-size: 12px; color: #64748b; font-weight: 600;">${new Date(activity.createdAt).toLocaleString('pl-PL')}</div>
-            <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #dbeafe; color: #1e40af; font-weight: 700; text-transform: uppercase;">GHL</span>
-          </div>
-          <div style="font-size: 13px; color: #1e293b; margin-top: 4px;">${activity.description || activity.type || '—'}</div>
-          ${activity.userName ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Przez: ${activity.userName}</div>` : ''}
-        </div>
-      `).join('');
+      timelineEl.innerHTML = allEvents.sort((a,b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)).map(event => {
+        const eventType = event.type || event.event_type || 'other';
+        const color = EVENT_COLORS[eventType] || EVENT_COLORS.other;
+        const label = EVENT_LABELS[eventType] || eventType;
+        const source = event.source || 'app';
+        const sourceBadge = source === 'ghl'
+          ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;">GHL</span>'
+          : '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#f0fdf4;color:#166534;font-weight:700;">APP</span>';
+        const desc = (event.description || '—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const uname = event.userName ? event.userName.replace(/</g,'&lt;') : '';
+        return '<div style="padding:12px;border-left:3px solid ' + color + ';background:#f8fafc;border-radius:6px;margin-bottom:8px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+          + '<div style="display:flex;align-items:center;gap:6px;">'
+          + '<span style="font-size:10px;padding:2px 8px;border-radius:12px;background:' + color + '20;color:' + color + ';font-weight:700;">' + label + '</span>'
+          + sourceBadge
+          + '</div>'
+          + '<div style="font-size:11px;color:#94a3b8;">' + new Date(event.createdAt || event.created_at).toLocaleString('pl-PL') + '</div>'
+          + '</div>'
+          + '<div style="font-size:13px;color:#1e293b;margin-top:6px;">' + desc + '</div>'
+          + (uname ? '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Przez: ' + uname + '</div>' : '')
+          + '</div>';
+      }).join('');
     }
     
     // Wypełnij historię połączeń z aplikacji (zakładka 2)
@@ -3653,7 +3952,7 @@ function createCallRow(call) {
       <div style="font-size:12px; color:#64748b;">${new Date(call.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${call.duration || 0}s</div>
     </div>
     <div style="background:${statusBg}; color:${statusColor}; padding:4px 12px; border-radius:6px; font-size:11px; font-weight:700;">${statusLabel}</div>
-    ${call.recordingUrl ? `<button class="btn-secondary" style="padding:6px 12px; font-size:11px;" onclick="playRecording('${call.recordingUrl}')">🎙️ Odtwórz</button>` : ''}
+    ${call.recordingUrl ? `<button class="btn-secondary" style="padding:6px 12px; font-size:11px;" onclick="playRecording('/api/call/${encodeURIComponent(call.callId)}/recording/proxy')">🎙️ Odtwórz</button>` : ''}
   `;
   return div;
 }
@@ -3709,7 +4008,21 @@ async function loadCalls() {
   feedEl.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Ładowanie połączeń...</p></div>';
 
   try {
-    const response = await fetch('/api/calls/history?days=30');
+    const uid = currentUser?.id || '';
+    const rol = currentUser?.role || 'reception';
+    const dateFrom = document.getElementById('filter-date-from')?.value || '';
+    const dateTo   = document.getElementById('filter-date-to')?.value || '';
+    const search   = document.getElementById('filter-search-name')?.value || '';
+    const rangeVal = document.getElementById('filter-range')?.value || '30';
+    const station  = document.getElementById('filter-station')?.value || 'all';
+    const agentId  = document.getElementById('filter-agent')?.value || 'all';
+    const params = new URLSearchParams({ days: rangeVal, userId: uid, role: rol });
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo)   params.set('dateTo', dateTo);
+    if (search)   params.set('search', search);
+    if (station !== 'all') params.set('station', station);
+    if (agentId !== 'all') params.set('agentId', agentId);
+    const response = await fetch(`/api/calls/history?${params}`);
     const data = await response.json();
     allCalls = data.calls || [];
     renderCallsTable(allCalls);
@@ -3772,3 +4085,31 @@ async function submitCreateTask() {
     }
   } catch(e) { showToast('Błąd tworzenia zadania', 'error'); }
 }
+
+// ─── HEARTBEAT & POOL ANIMATION ─────────────────────────────────────────────
+function startHeartbeat() {
+  if (!currentUser) return;
+  setInterval(async () => {
+    try {
+      await fetch('/api/user/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, userName: currentUser.name })
+      });
+    } catch(e) {}
+  }, 60000); // Co minutę
+}
+
+function animatePoolTasks() {
+  const poolTasks = document.querySelectorAll('.pool-task');
+  poolTasks.forEach(task => {
+    const createdTime = task.getAttribute('data-created');
+    if (createdTime) {
+      const diffHrs = (new Date() - new Date(createdTime)) / 3600000;
+      if (diffHrs > 2) {
+        task.classList.add('urgent-blink');
+      }
+    }
+  });
+}
+setInterval(animatePoolTasks, 30000);
