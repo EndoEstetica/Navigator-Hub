@@ -968,12 +968,22 @@ app.post('/webhook/zadarma', async (req, res) => {
       tag: null
     };
     // Przypisz userId z mapy aktywnych użytkowników
-    const inboundExt = called || caller;
-    const assignedUserId = activeExtMap.get(inboundExt) || activeExtMap.get(caller) || null;
-    if (assignedUserId) {
-      callObj.userId    = assignedUserId;
-      callObj.agentName = USERS[assignedUserId]?.name || null;
-      console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} → ${assignedUserId}`);
+    const inboundExt = String(targetExt || called || caller || '');
+    const isSharedExt = SHARED_EXTENSIONS.has(inboundExt);
+
+    if (isSharedExt && callObj.outsideWorkingHours) {
+      // Recepcja poza godzinami — nikt nie jest przy stanowisku, nie przypisuj do osoby
+      callObj.userId    = null;
+      callObj.agentName = null;
+      callObj.unattended = true; // flaga: połączenie bez obsługi
+      console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} poza godzinami — brak przypisania`);
+    } else {
+      const assignedUserId = activeExtMap.get(inboundExt) || activeExtMap.get(caller) || null;
+      if (assignedUserId) {
+        callObj.userId    = assignedUserId;
+        callObj.agentName = USERS[assignedUserId]?.name || null;
+        console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} → ${assignedUserId}`);
+      }
     }
     storeCall(callObj);
     broadcast({ type: 'CALL_RINGING', ...callObj });
@@ -2615,20 +2625,28 @@ app.get('/api/calls/history', async (req, res) => {
         if (row.pbx_call_id && seenPbxIds.has(row.pbx_call_id)) continue;
         if (row.pbx_call_id) seenPbxIds.add(row.pbx_call_id);
         
-        uniqueCalls.push({
-          callId: row.call_id,
-          pbxCallId: row.pbx_call_id,
-          from: row.caller_phone,
-          to: row.called_phone,
-          direction: row.direction,
-          status: row.status,
-          duration: row.duration_seconds,
-          recordingUrl: row.recording_url,
-          contactName: row.patient_name,
-          contactId: row.ghl_contact_id,
-          userId: row.user_id,
-          agentName: row.user_id && USERS[row.user_id] ? USERS[row.user_id].name : null,
+        uniqueCalls.push({\n          callId: row.call_id,\n          pbxCallId: row.pbx_call_id,\n          from: row.caller_phone,\n          to: row.called_phone,\n          direction: row.direction,\n          status: row.status,\n          duration: row.duration_seconds,\n          recordingUrl: row.recording_url,\n          contactName: row.patient_name,\n          contactId: row.ghl_contact_id,
+          userId: (() => {
+            // Ext współdzielony + poza godzinami → brak przypisania
+            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
+            const ext = String(row.called_phone || row.caller_phone || '');
+            const isShared = SHARED_EXTENSIONS.has(ext) || ext.endsWith('103');
+            if (isShared && isOutside) return null;
+            return row.user_id || null;
+          })(),
+          agentName: (() => {
+            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
+            const ext = String(row.called_phone || row.caller_phone || '');
+            const isShared = SHARED_EXTENSIONS.has(ext) || ext.endsWith('103');
+            if (isShared && isOutside) return null; // frontend pokaże "Niezalogowany"
+            return row.user_id && USERS[row.user_id] ? USERS[row.user_id].name : null;
+          })(),
           outsideWorkingHours: row.created_at ? isOutsideWorkingHours(row.created_at) : false,
+          unattended: (() => {
+            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
+            const ext = String(row.called_phone || row.caller_phone || '');
+            return isOutside && (SHARED_EXTENSIONS.has(ext) || ext.endsWith('103'));
+          })(),
           tag: row.contact_type || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
           contactType: row.contact_type,
           callEffect: row.call_effect,

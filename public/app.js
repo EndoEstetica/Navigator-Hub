@@ -316,9 +316,12 @@ function loadCallbackList(callsData) {
   const ineffective = calls.filter(c => (c.tag === 'ineffective' || c.status === 'ineffective') && c.direction === 'outbound');
 
   const renderCallbackItem = (c) => {
-    const aName = c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null);
+    const isUnattended = c.unattended || (c.outsideWorkingHours && !c.userId && !c.agentName);
+    const aName = isUnattended ? null : (c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null));
     const aRole = c.userId ? (AGENT_ROLES[c.userId] || 'reception') : null;
-    const agentBadge = aName ? `<span class="agent-tag role-${aRole}" style="font-size:10px;padding:1px 6px;">👤 ${escHtml(aName)}</span>` : '';
+    const agentBadge = isUnattended
+      ? `<span style="font-size:10px;padding:1px 6px;background:#f1f5f9;border-radius:8px;color:#94a3b8;font-style:italic;">🔕 Niezalogowany</span>`
+      : (aName ? `<span class="agent-tag role-${aRole}" style="font-size:10px;padding:1px 6px;">👤 ${escHtml(aName)}</span>` : '');
     const outsideBadge = c.outsideWorkingHours ? `<span class="badge-outside-hours">🌙 Poza godz.</span>` : '';
     return `
     <div class="callback-item">
@@ -1358,16 +1361,20 @@ function renderCallRow(c, isAdmin = false) {
       : `<button class="btn-fetch-rec" onclick="fetchRecording('${c.callId}', this)" title="Sprawdź nagranie">▶ Sprawdź</button>`;
 
   // Kto obsługiwał — agentName przychodzi z serwera; fallback do globalnej stałej
-  const agentName = c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null);
-  const agentHtml = agentName
-    ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(agentName)}</div>` : '';
+  const isUnattended = c.unattended || (c.outsideWorkingHours && !c.userId && !c.agentName);
+  const agentName = isUnattended ? null : (c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null));
+  const agentHtml = isUnattended
+    ? `<div style="font-size:11px;color:#94a3b8;font-style:italic;">🔕 Niezalogowany</div>`
+    : (agentName ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(agentName)}</div>` : '');
   const agentRole = c.userId ? (AGENT_ROLES[c.userId] || 'reception') : null;
-  const agentTagHtml = agentName
-    ? `<div style="display:flex;flex-direction:column;gap:2px;">
-        <span class="agent-tag role-${agentRole}">👤 ${escHtml(agentName)}</span>
-        <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${agentRole === 'opiekun' ? '#dbeafe' : '#dcfce7'};color:${agentRole === 'opiekun' ? '#1d4ed8' : '#166534'};font-weight:600;">${agentRole === 'opiekun' ? 'Opiekun' : 'Recepcja'}</span>
-       </div>`
-    : '<span style="color:#94a3b8;font-size:11px;">—</span>';
+  const agentTagHtml = isUnattended
+    ? `<span style="font-size:11px;color:#94a3b8;font-style:italic;padding:2px 8px;background:#f1f5f9;border-radius:8px;">🔕 Niezalogowany</span>`
+    : (agentName
+      ? `<div style="display:flex;flex-direction:column;gap:2px;">
+          <span class="agent-tag role-${agentRole}">👤 ${escHtml(agentName)}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${agentRole === 'opiekun' ? '#dbeafe' : '#dcfce7'};color:${agentRole === 'opiekun' ? '#1d4ed8' : '#166534'};font-weight:600;">${agentRole === 'opiekun' ? 'Opiekun' : 'Recepcja'}</span>
+         </div>`
+      : '<span style="color:#94a3b8;font-size:11px;">—</span>');
 
   // Badge: poza godzinami pracy
   const outsideHoursBadge = c.outsideWorkingHours
