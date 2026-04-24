@@ -1530,17 +1530,27 @@ app.get('/api/contact/:id/card', async (req, res) => {
     );
     const contact = contactResp.data?.contact || {};
 
-    const activitiesResp = await axios.get(
-      `https://services.leadconnectorhq.com/contacts/${contactId}/activities?limit=50`,
-      { headers: ghlHeaders, timeout: 10000 }
-    );
-    const activities = activitiesResp.data?.activities || [];
+    let activities = [];
+    try {
+      const activitiesResp = await axios.get(
+        `https://services.leadconnectorhq.com/contacts/${contactId}/activities?limit=50`,
+        { headers: ghlHeaders, timeout: 8000 }
+      );
+      activities = activitiesResp.data?.activities || activitiesResp.data?.data || [];
+    } catch (e) {
+      console.warn('[Patient Card] GHL activities error (non-fatal):', e.message);
+    }
 
-    const oppsResp = await axios.get(
-      `https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}&limit=10`,
-      { headers: ghlHeaders, timeout: 10000 }
-    );
-    const opportunities = oppsResp.data?.opportunities || [];
+    let opportunities = [];
+    try {
+      const oppsResp = await axios.get(
+        `https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}&limit=10`,
+        { headers: ghlHeaders, timeout: 10000 }
+      );
+      opportunities = oppsResp.data?.opportunities || [];
+    } catch (e) {
+      console.warn('[Patient Card] GHL opportunities error (non-fatal):', e.message);
+    }
 
     // Pobierz notatki z GHL (i zsynchronizuj z events)
     let ghlNotes = [];
@@ -1635,6 +1645,11 @@ app.get('/api/contact/:id/card', async (req, res) => {
     const prefChannel    = getFieldByKey('preferowany_kana');
     const potProgram     = getFieldByKey('potencjalny_program');
     const firstCallNote  = getFieldByKey('notatka_z_pierwszej_rozmowy');
+    const leadSource     = getFieldByKey('rdo_leada') || getFieldByKey('lead_source');
+    const zgodaMarketing = getField('R0X7n8GG7545mnrGnREg') || getFieldByKey('zgoda_marketingowa');
+
+    // Informacja o osobie przypisanej do szansy (kto wykonywał pierwsze połączenie wychodzące)
+    const firstOpp = opportunities[0] || null;
 
     // Sprawdź W0 z raportów w Supabase
     let w0FromReports = { scheduled: false, date: null, doctor: null };
@@ -1682,10 +1697,19 @@ app.get('/api/contact/:id/card', async (req, res) => {
         // Zmapowane custom fields
         mainProblem: mainProblem?.value || '',
         sourceContact: sourceContact?.value || '',
-        marketingConsent: marketing?.value || '',
+        marketingConsent: (zgodaMarketing?.value || marketing?.value || '') ? true : false,
+        marketingConsentRaw: zgodaMarketing?.value || marketing?.value || '',
         preferredChannel: prefChannel?.value || '',
         potentialProgram: potProgram?.value || '',
         firstCallNote: firstCallNote?.value || '',
+        leadSource: leadSource?.value || contact.source || '',
+        // Osoba przypisana do szansy sprzedaży
+        opportunityAssignedTo: firstOpp?.assignedTo || null,
+        opportunityAssignedToName: firstOpp?.assignedTo || null,
+        // Pipeline
+        pipelineId: firstOpp?.pipelineId || null,
+        pipelineStageName: GHL_STAGES[firstOpp?.pipelineStageId] || null,
+        pipelineStageId: firstOpp?.pipelineStageId || null,
         w0_date: contactW0.date || (w0DateField?.value ? new Date(Number(w0DateField.value)).toISOString() : null),
         w0_notes: w0NotesField?.value || '',
         w0_scheduled: !!(contactW0.scheduled || w0DateField?.value),
@@ -2601,7 +2625,7 @@ app.get('/api/calls/history', async (req, res) => {
           userId: row.user_id,
           agentName: row.user_id && USERS[row.user_id] ? USERS[row.user_id].name : null,
           outsideWorkingHours: row.created_at ? isOutsideWorkingHours(row.created_at) : false,
-          tag: row.contact_type || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
+          tag: row.call_tag || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
           contactType: row.contact_type,
           callEffect: row.call_effect,
           notes: row.notes,
