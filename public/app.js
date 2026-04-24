@@ -3,6 +3,22 @@
    Frontend Application Logic — Enhanced Edition
    ============================================================ */
 
+// ==================== STAŁE GLOBALNE ====================
+const AGENT_NAMES = {
+  kasia: 'Kasia', agnieszka: 'Agnieszka', asia: 'Asia', agata_r: 'Agata (Rec.)',
+  zastepstwo: 'Zastępstwo', agata_o: 'Agata Opiekun', aneta_o: 'Aneta Opiekun',
+  bartosz: 'Bartosz', sandra: 'Sandra', aneta_a: 'Aneta (A)', patrycja: 'Patrycja', sonia: 'Sonia'
+};
+const AGENT_ROLES = { agata_o: 'opiekun', aneta_o: 'opiekun' };
+// userId → numer wewnętrzny (synchronizacja z USERS w server.js)
+// Uzupełniany dynamicznie z /api/users po zalogowaniu (USER_EXT_MAP_LIVE)
+const USER_EXT_MAP = {
+  kasia: '103', agnieszka: '103', asia: '103', agata_r: '103', zastepstwo: '103',
+  agata_o: '101', aneta_o: '102'
+};
+// Mapa ext→userId ładowana z serwera (zastępuje statyczny USER_EXT_MAP)
+let USER_EXT_MAP_LIVE = { ...USER_EXT_MAP };
+
 // ==================== GHL STAGES ====================
 const GHL_STAGE_IDS = {
   NEW:          '4d006021-f3b2-4efc-8efc-4f049522379c',
@@ -64,15 +80,32 @@ let pollingInterval = null;
 let currentUser = null;
 
 function initLoginScreen() {
-  const saved = localStorage.getItem('nav_user');
+  const saved = sessionStorage.getItem('nav_user');
   if (saved) {
     try {
       currentUser = JSON.parse(saved);
       showApp();
       return;
-    } catch(e) { localStorage.removeItem('nav_user'); }
+    } catch(e) { sessionStorage.removeItem('nav_user'); }
   }
   showLoginScreen();
+}
+
+// Ładuje exty użytkowników z serwera i aktualizuje USER_EXT_MAP_LIVE
+async function loadUserExts() {
+  try {
+    const r = await fetch('/api/users');
+    const data = await r.json();
+    (data.users || []).forEach(u => {
+      if (u.id && u.ext) {
+        USER_EXT_MAP_LIVE[u.id] = u.ext;
+        // Zaktualizuj ext w currentUser jeśli to ten sam user
+        if (currentUser && currentUser.id === u.id && !currentUser.ext) {
+          currentUser.ext = u.ext;
+        }
+      }
+    });
+  } catch(e) { console.warn('[UserExts] Nie udało się załadować extów:', e.message); }
 }
 
 async function showLoginScreen() {
@@ -113,13 +146,16 @@ async function showLoginScreen() {
 
 function loginAs(user) {
   currentUser = user;
-  localStorage.setItem('nav_user', JSON.stringify(user));
+  sessionStorage.setItem('nav_user', JSON.stringify(user));
+  sessionStorage.setItem('nav_loginAt', String(Date.now()));
   showApp();
 }
 
 function logoutUser() {
   currentUser = null;
-  localStorage.removeItem('nav_user');
+  sessionStorage.removeItem('nav_user');
+  sessionStorage.removeItem('nav_loginAt');
+  stopIncomingRing();
   showLoginScreen();
 }
 
@@ -143,15 +179,18 @@ function showApp() {
 }
 
 function initApp() {
+  loadUserExts();         // Załaduj exty z serwera (dla routingu popup)
   startHeartbeat();
+  startSessionTimer();    // Auto-logout po 8h
   updateClock();
   setInterval(updateClock, 1000);
   connectWebSocket();
-  loadDashboardData(); // Nowa funkcja zbiorcza
+  loadDashboardData();
   loadContacts();
   startPolling();
   initDialer();
   initSoniaChat();
+  initReportAutoSave();   // Auto-save raportu na każdą zmianę
 
   // Heartbeat: informuj serwer o aktywności użytkownika co 5 minut
   if (currentUser?.id) {
@@ -273,13 +312,9 @@ function loadCallbackList(callsData) {
   const ineffective = calls.filter(c => (c.tag === 'ineffective' || c.status === 'ineffective') && c.direction === 'outbound');
 
   const renderCallbackItem = (c) => {
-    const agentNameMap2 = {
-      kasia:'Kasia',agnieszka:'Agnieszka',asia:'Asia',agata_r:'Agata (Rec.)',
-      zastepstwo:'Zastępstwo',agata_o:'Agata Opiekun',aneta_o:'Aneta Opiekun',
-      bartosz:'Bartosz',sandra:'Sandra',aneta_a:'Aneta (A)',patrycja:'Patrycja',sonia:'Sonia'
-    };
-    const aName = c.agentName || (c.userId ? (agentNameMap2[c.userId] || c.userId) : null);
-    const agentBadge = aName ? `<span class="agent-tag role-${c.userId && ['agata_o','aneta_o'].includes(c.userId) ? 'opiekun':'reception'}" style="font-size:10px;padding:1px 6px;">👤 ${escHtml(aName)}</span>` : '';
+    const aName = c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null);
+    const aRole = c.userId ? (AGENT_ROLES[c.userId] || 'reception') : null;
+    const agentBadge = aName ? `<span class="agent-tag role-${aRole}" style="font-size:10px;padding:1px 6px;">👤 ${escHtml(aName)}</span>` : '';
     const outsideBadge = c.outsideWorkingHours ? `<span class="badge-outside-hours">🌙 Poza godz.</span>` : '';
     return `
     <div class="callback-item">
@@ -649,7 +684,7 @@ function updateClock() {
 
 function setUserRole(role) {
   currentUserRole = role;
-  localStorage.setItem('nav_role', role);
+  sessionStorage.setItem('nav_role', role);
   // Pokaż/ukryj elementy admin-only
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = role === 'admin' ? '' : 'none';
@@ -689,10 +724,18 @@ function connectWebSocket() {
   try {
     wsConnection = new WebSocket(wsUrl);
 
+    let wsReconnectCount = 0;
+
     wsConnection.onopen = () => {
       setWsStatus(true);
-      showToast('Połączono z serwerem', 'success');
-      // Szybszy polling gdy WS działa
+      if (wsReconnectCount > 0) {
+        showToast('Przywrócono połączenie z serwerem', 'success');
+        // Poproś o brakujące eventy od ostatniego disconnectu
+        wsConnection.send(JSON.stringify({ type: 'GET_CALLS_HISTORY', days: 1 }));
+        // Odśwież widok jeśli był otwarty
+        if (currentView === 'calls') loadCalls();
+      }
+      wsReconnectCount++;
       startPolling();
     };
 
@@ -791,21 +834,17 @@ function handleCallRinging(data) {
 
   if (currentView === 'calls') renderCallsTable(allCalls);
 
+  // Dźwięk dzwonka (tylko dla połączeń przychodzących do mojego stanowiska)
+  if (data.direction === 'inbound') playIncomingRing();
+
   // Otwórz popup tylko dla właściwego stanowiska (po targetExt) lub userId
   const myUserId = currentUser?.id;
   const myRole = currentUser?.role;
 
-  // Mapa userId → ext (odpowiada USERS w server.js)
-  const USER_EXT_MAP = {
-    kasia: '103', agnieszka: '103', asia: '103', agata_r: '103', zastepstwo: '103',
-    agata_o: '101', aneta_o: '102'
-  };
-  const myExt = USER_EXT_MAP[myUserId] || null;
+  // Pobierz ext z danych zalogowanego użytkownika (serwer zwraca ext w /api/users)
+  // lub fallback do stałej mapy
+  const myExt = currentUser?.ext || USER_EXT_MAP_LIVE[myUserId] || null;
 
-  // Logika dopasowania:
-  // 1) Admin widzi wszystko (popup i tabelę)
-  // 2) Jeśli targetExt jest znany → popup tylko dla stanowiska o tym numerze
-  // 3) Fallback: stara logika po userId
   const isMyCall = myRole === 'admin' || (
     data.targetExt
       ? (myExt && String(data.targetExt) === String(myExt))
@@ -836,26 +875,26 @@ function handleCallRinging(data) {
 }
 
 function handleCallAnswered(data) {
+  stopIncomingRing();
   // Aktualizuj store
   const idx = allCalls.findIndex(c => c.callId === data.callId);
-  if (idx >= 0) allCalls[idx] = { ...allCalls[idx], status: 'active', tag: 'connected' };
+  if (idx >= 0) allCalls[idx] = { ...allCalls[idx], status: 'active', tag: 'connected',
+    agentName: data.agentName || allCalls[idx].agentName };
   if (currentView === 'calls') renderCallsTable(allCalls);
-  // Zaktualizuj tag w popupie
   const tagEl = document.getElementById('popupCallTag');
   if (tagEl) { tagEl.textContent = 'POŁĄCZONO'; tagEl.className = 'call-tag tag-connected'; tagEl.style.display = 'inline-block'; }
-  // Ukryj przycisk Odbierz
   const answerBtn = document.getElementById('popupAnswerBtn');
   if (answerBtn) answerBtn.style.display = 'none';
-  // Odblokuj formularz raportu
   const overlay = document.getElementById('reportBlockOverlay');
   if (overlay) overlay.classList.add('hidden');
-  // Uruchom timer od momentu odebrania
   if (activeCallId === data.callId) startCallTimer();
 }
 
 function handleCallEnded(data) {
+  stopIncomingRing();
   const idx = allCalls.findIndex(c => c.callId === data.callId);
-  if (idx >= 0) allCalls[idx] = { ...allCalls[idx], status: 'ended', tag: data.tag, duration: data.duration };
+  if (idx >= 0) allCalls[idx] = { ...allCalls[idx], status: 'ended', tag: data.tag,
+    duration: data.duration, agentName: data.agentName || allCalls[idx].agentName };
   if (currentView === 'calls') renderCallsTable(allCalls);
 
   if (data.tag === 'connected') startRecordingPoller(data.callId);
@@ -1314,18 +1353,11 @@ function renderCallRow(c, isAdmin = false) {
       ? `<span data-rec-callid="${escHtml(c.callId)}" class="btn-rec-pending" title="Nagranie pojawi się po zakończeniu przetwarzania">⏳ Oczekuje...</span>`
       : `<button class="btn-fetch-rec" onclick="fetchRecording('${c.callId}', this)" title="Sprawdź nagranie">▶ Sprawdź</button>`;
 
-  // Kto obsługiwał — agentName przychodzi z serwera; fallback do lokalnej mapy
-  const agentNameMap = {
-    kasia: 'Kasia', agnieszka: 'Agnieszka', asia: 'Asia', agata_r: 'Agata (Rec.)',
-    zastepstwo: 'Zastępstwo', agata_o: 'Agata Opiekun', aneta_o: 'Aneta Opiekun',
-    bartosz: 'Bartosz', sandra: 'Sandra', aneta_a: 'Aneta (A)', patrycja: 'Patrycja', sonia: 'Sonia'
-  };
-  const agentName = c.agentName || (c.userId ? (agentNameMap[c.userId] || c.userId) : null);
+  // Kto obsługiwał — agentName przychodzi z serwera; fallback do globalnej stałej
+  const agentName = c.agentName || (c.userId ? (AGENT_NAMES[c.userId] || c.userId) : null);
   const agentHtml = agentName
     ? `<div style="font-size:11px;color:#64748b;">👤 ${escHtml(agentName)}</div>` : '';
-  // Agent role tag for admin column
-  const agentRoles = { agata_o: 'opiekun', aneta_o: 'opiekun' };
-  const agentRole = c.userId ? (agentRoles[c.userId] || 'reception') : null;
+  const agentRole = c.userId ? (AGENT_ROLES[c.userId] || 'reception') : null;
   const agentTagHtml = agentName
     ? `<div style="display:flex;flex-direction:column;gap:2px;">
         <span class="agent-tag role-${agentRole}">👤 ${escHtml(agentName)}</span>
@@ -1390,7 +1422,7 @@ function renderCallRow(c, isAdmin = false) {
       <td onclick="event.stopPropagation()">${recHtml}</td>
       <td onclick="event.stopPropagation()">
         <div style="display:flex;flex-direction:column;gap:4px;">
-          ${(c.from || c.to) ? `<button class="btn-call btn-sm" onclick="initiateCall('${c.from || c.to}', '${escHtml(c.contactName || '')}')">📞 Oddzwoń</button>` : ''}
+          ${(c.from || c.to) ? `<button class="btn-call btn-sm" onclick="initiateCall('${escHtml(c.from || c.to || '')}', '${escHtml(c.contactName || '')}')">📞 Oddzwoń</button>` : ''}
           ${noteHtml}
         </div>
       </td>
@@ -1688,6 +1720,11 @@ function openCallPopup(contact) {
   resetReportForm();
   document.getElementById('callPopup').classList.remove('hidden');
 
+  // Przywróć draft jeśli istnieje (musi być po resetReportForm i po ujawnieniu popup)
+  if (contact.callId) {
+    setTimeout(() => restoreDraftReport(contact.callId), 50);
+  }
+
   // Pokaż nakładkę blokującą raport podczas dzwonienia
   const overlay = document.getElementById('reportBlockOverlay');
   if (overlay) {
@@ -1856,6 +1893,7 @@ function closeCallPopup(force = false) {
   const popup = document.getElementById('callPopup');
   if (popup) popup.classList.remove('minimized');
   stopCallTimer();
+  clearDraftReport(activeCallId);
   currentContact = null;
   selectedStatus = null;
   selectedOutcome = null;
@@ -2018,6 +2056,173 @@ function initDatePickerDefaults() {
   if (todayBtn) { todayBtn.classList.add('active'); }
 }
 
+// ══════════════════════════════════════════════════════════════
+// DZWONEK PRZYCHODZĄCY — Web Audio API (bez pliku MP3)
+// ══════════════════════════════════════════════════════════════
+let _ringAudioCtx   = null;
+let _ringIntervalId = null;
+
+function playIncomingRing() {
+  stopIncomingRing(); // zatrzymaj poprzedni jeśli trwa
+  try {
+    _ringAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _ringAudioCtx;
+
+    const playBurst = (startTime) => {
+      // Dwa krótkie tony — klasyczny dzwonek biurkowy
+      [0, 0.25].forEach(offset => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, ctx.currentTime + startTime + offset);
+        osc.frequency.setValueAtTime(480, ctx.currentTime + startTime + offset + 0.05);
+        gain.gain.setValueAtTime(0, ctx.currentTime + startTime + offset);
+        gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + startTime + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + offset + 0.22);
+        osc.start(ctx.currentTime + startTime + offset);
+        osc.stop(ctx.currentTime + startTime + offset + 0.23);
+      });
+    };
+
+    playBurst(0);
+    _ringIntervalId = setInterval(() => playBurst(0), 2000);
+  } catch(e) {
+    console.warn('[Ring] Web Audio niedostępny:', e.message);
+  }
+}
+
+function stopIncomingRing() {
+  if (_ringIntervalId) { clearInterval(_ringIntervalId); _ringIntervalId = null; }
+  if (_ringAudioCtx)   { try { _ringAudioCtx.close(); } catch(e) {} _ringAudioCtx = null; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SESSION TIMEOUT — auto-logout po 8 godzinach
+// ══════════════════════════════════════════════════════════════
+const SESSION_MAX_MS = 8 * 60 * 60 * 1000; // 8h
+
+function startSessionTimer() {
+  const loginAt = parseInt(sessionStorage.getItem('nav_loginAt') || '0', 10);
+  if (!loginAt) {
+    sessionStorage.setItem('nav_loginAt', String(Date.now()));
+  }
+
+  // Sprawdzaj co minutę
+  setInterval(() => {
+    const start = parseInt(sessionStorage.getItem('nav_loginAt') || '0', 10);
+    if (!start) return;
+    const elapsed = Date.now() - start;
+    const remaining = SESSION_MAX_MS - elapsed;
+
+    if (remaining <= 0) {
+      showToast('⏰ Sesja wygasła — wylogowano automatycznie', 'info');
+      setTimeout(logoutUser, 1500);
+    } else if (remaining < 15 * 60 * 1000) {
+      // Ostrzeżenie na 15 minut przed końcem (tylko raz)
+      if (!window._sessionWarnShown) {
+        window._sessionWarnShown = true;
+        showToast('⚠️ Sesja wygasa za mniej niż 15 minut', 'info');
+      }
+    }
+  }, 60 * 1000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTO-SAVE RAPORTU — zapis przy każdej zmianie (debounce 300ms)
+// ══════════════════════════════════════════════════════════════
+const REPORT_DRAFT_FIELDS = [
+  'programLeczenia','dataW0','contactDateTime','powodRezygnacji',
+  'powodZmiany','nowyTermin','powodOdwolania','wizytaContactDateTime',
+  'stalyNotatka','stalyDataWizyty','stalyContactDateTime','spamNotatka',
+  'manualPatientName'
+];
+
+let _draftDebounceTimer = null;
+
+function initReportAutoSave() {
+  const popup = document.getElementById('callPopup');
+  if (!popup) return;
+
+  // Jeden listener na cały popup — łapie input + change z każdego pola
+  popup.addEventListener('input',  _debounceDraftSave);
+  popup.addEventListener('change', _debounceDraftSave);
+}
+
+function _debounceDraftSave() {
+  clearTimeout(_draftDebounceTimer);
+  _draftDebounceTimer = setTimeout(saveDraftReport, 300);
+}
+
+function saveDraftReport() {
+  if (!activeCallId) return;
+  const draft = {
+    callId:         activeCallId,
+    selectedStatus,
+    selectedOutcome,
+    savedAt:        Date.now(),
+    fields:         {}
+  };
+  REPORT_DRAFT_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) draft.fields[id] = el.value;
+  });
+  try {
+    sessionStorage.setItem(`report_draft_${activeCallId}`, JSON.stringify(draft));
+    _showDraftIndicator();
+  } catch(e) {}
+}
+
+function restoreDraftReport(callId) {
+  if (!callId) return false;
+  try {
+    const raw = sessionStorage.getItem(`report_draft_${callId}`);
+    if (!raw) return false;
+    const draft = JSON.parse(raw);
+    if (!draft || draft.callId !== callId) return false;
+
+    // Przywróć status
+    if (draft.selectedStatus) {
+      selectStatus(draft.selectedStatus);
+    }
+    // Przywróć outcome
+    if (draft.selectedOutcome) {
+      selectOutcome(draft.selectedOutcome);
+    }
+    // Przywróć pola tekstowe
+    Object.entries(draft.fields || {}).forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined) el.value = val;
+    });
+
+    const ageS = Math.round((Date.now() - (draft.savedAt || 0)) / 1000);
+    const ageLabel = ageS < 60 ? `${ageS}s` : `${Math.round(ageS/60)}min`;
+    showToast(`📋 Przywrócono niezapisany raport (${ageLabel} temu)`, 'info');
+    return true;
+  } catch(e) { return false; }
+}
+
+function clearDraftReport(callId) {
+  if (!callId) return;
+  sessionStorage.removeItem(`report_draft_${callId}`);
+  _hideDraftIndicator();
+}
+
+function _showDraftIndicator() {
+  let el = document.getElementById('draftSavedIndicator');
+  if (!el) return;
+  el.textContent = '💾 Zapisano';
+  el.style.opacity = '1';
+  clearTimeout(el._fadeTimer);
+  el._fadeTimer = setTimeout(() => { el.style.opacity = '0.4'; }, 1500);
+}
+
+function _hideDraftIndicator() {
+  const el = document.getElementById('draftSavedIndicator');
+  if (el) el.style.opacity = '0';
+}
+
 function startCallTimer() {
   callStartTime = Date.now();
   // Pokaż timer i przycisk rozłącz
@@ -2067,6 +2272,7 @@ function resetReportForm() {
   if (w0Notice) w0Notice.classList.add('hidden');
   const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
   if (newPatientTile) { newPatientTile.style.opacity = ''; newPatientTile.style.cursor = ''; newPatientTile.title = ''; }
+  _hideDraftIndicator();
 }
 
 // ==================== STATUS SELECTION (C7 — 2x2 tiles) ====================
@@ -2097,6 +2303,7 @@ function selectStatus(status) {
   selectedOutcome = null;
   document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.outcome-fields').forEach(f => f.classList.add('hidden'));
+  saveDraftReport(); // auto-save przy wyborze statusu
 }
 
 function selectOutcome(outcome) {
@@ -2107,6 +2314,7 @@ function selectOutcome(outcome) {
   document.querySelectorAll('.outcome-fields').forEach(f => f.classList.add('hidden'));
   const fields = document.getElementById(`outcome-${outcome}`);
   if (fields) fields.classList.remove('hidden');
+  saveDraftReport(); // auto-save przy wyborze outcome
 }
 
 // ==================== TIME SETTERS ====================
@@ -2343,7 +2551,7 @@ async function handleRegularPatientReport(contactId, data) {
 }
 
 // ==================== TASKS (F1/F2) ====================
-let completedTaskIds = new Set(JSON.parse(localStorage.getItem('completedTaskIds') || '[]'));
+let completedTaskIds = new Set(JSON.parse(sessionStorage.getItem('completedTaskIds') || '[]'));
 
 async function loadTodayTasks() {
   const listEl = document.getElementById('tasksTodayList');
@@ -2621,7 +2829,7 @@ function formatTaskDue(dueDate) {
 
 async function completeTask(taskId, btn) {
   completedTaskIds.add(taskId);
-  localStorage.setItem('completedTaskIds', JSON.stringify([...completedTaskIds]));
+  sessionStorage.setItem('completedTaskIds', JSON.stringify([...completedTaskIds]));
 
   // Usuń wizualnie z listy na kokpicie
   const item = btn.closest('.task-item');
@@ -2772,7 +2980,7 @@ function renderAllTasksDone(el, tasks) {
 
 function restoreTask(taskId) {
   completedTaskIds.delete(taskId);
-  localStorage.setItem('completedTaskIds', JSON.stringify([...completedTaskIds]));
+  sessionStorage.setItem('completedTaskIds', JSON.stringify([...completedTaskIds]));
   loadAllTasks();
   loadTodayTasks();
 }
@@ -3889,15 +4097,12 @@ async function openPatientCard(contactId, contactName) {
     if (el) el.innerHTML = '<div style="padding:12px;background:#f8fafc;border-radius:8px;color:#64748b;text-align:center;">Ładowanie...</div>';
   });
 
+  // ── Fetch głównych danych karty (Dane + GHL timeline + historia połączeń)
+  let data = null;
   try {
-    // Fetch all data in parallel
-    const [cardResp, tasksResp] = await Promise.all([
-      fetch(`/api/contact/${contactId}/card`),
-      fetch(`/api/contact/${contactId}/tasks`).catch(() => null)
-    ]);
-
-    if (!cardResp.ok) throw new Error('Błąd pobierania karty pacjenta');
-    const data = await cardResp.json();
+    const cardResp = await fetch(`/api/contact/${contactId}/card`);
+    if (!cardResp.ok) throw new Error(`HTTP ${cardResp.status}`);
+    data = await cardResp.json();
     const contact = data.contact || {};
 
     // ── TAB: DANE ──────────────────────────────────────────────
@@ -4026,47 +4231,52 @@ async function openPatientCard(contactId, contactName) {
         }).join('');
     }
 
-    // ── TAB: TASKI ────────────────────────────────────────────
-    const tasksEl = document.getElementById('patientCardTasks');
-    if (tasksResp && tasksResp.ok) {
-      const tasksData = await tasksResp.json();
-      const tasks = tasksData.tasks || tasksData || [];
-      if (!Array.isArray(tasks) || tasks.length === 0) {
-        tasksEl.innerHTML = '<div style="padding:12px;background:#f8fafc;border-radius:8px;color:#64748b;text-align:center;">Brak zadań dla tego pacjenta</div>';
-      } else {
-        const now = new Date();
-        tasksEl.innerHTML = tasks
-          .sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate))
-          .map(t => {
-            const isCompleted = t.status === 'completed';
-            const dueDate = t.dueDate ? new Date(t.dueDate) : null;
-            const isOverdue = dueDate && dueDate < now && !isCompleted;
-            const cls = isCompleted ? 'completed' : (isOverdue ? 'overdue' : '');
-            const dueDateStr = dueDate
-              ? dueDate.toLocaleDateString('pl-PL', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-              : '—';
-            return `<div class="pc-task-row ${cls}">
-              <div class="pc-task-title">
-                ${isCompleted ? '✅' : isOverdue ? '🔴' : '🔵'} ${escHtml(t.title || 'Zadanie')}
-              </div>
-              ${t.body ? `<div style="font-size:12px;color:#64748b;margin-top:3px;">${escHtml(t.body)}</div>` : ''}
-              <div class="pc-task-meta">
-                Termin: ${dueDateStr}
-                ${t.assignedTo ? ` • Przypisane: ${escHtml(t.assignedTo)}` : ''}
-                ${isCompleted ? ' • <span style="color:#10b981;">Ukończone</span>' : ''}
-                ${isOverdue   ? ' • <span style="color:#ef4444;">Po terminie</span>' : ''}
-              </div>
-            </div>`;
-          }).join('');
-      }
-    } else {
-      tasksEl.innerHTML = '<div style="padding:12px;background:#f8fafc;border-radius:8px;color:#64748b;text-align:center;">Brak danych o zadaniach</div>';
-    }
-
   } catch (err) {
-    console.error('[Patient Card] Error:', err);
-    const tl = document.getElementById('patientCardTimeline');
-    if (tl) tl.innerHTML = `<div style="padding:12px;background:#fef2f2;border-radius:8px;color:#ef4444;text-align:center;">Błąd: ${err.message}</div>`;
+    console.error('[Patient Card] Dane:', err);
+    ['patientCardTimeline','patientCardCallHistory'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div style="padding:12px;background:#fef2f2;border-radius:8px;color:#ef4444;text-align:center;">Błąd ładowania: ${err.message}</div>`;
+    });
+  }
+
+  // ── TAB: TASKI — osobny fetch, niezależny od danych karty ─────
+  const tasksEl = document.getElementById('patientCardTasks');
+  try {
+    const tasksResp = await fetch(`/api/contact/${contactId}/tasks`);
+    if (!tasksResp.ok) throw new Error(`HTTP ${tasksResp.status}`);
+    const tasksData = await tasksResp.json();
+    const tasks = tasksData.tasks || tasksData || [];
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      tasksEl.innerHTML = '<div style="padding:12px;background:#f8fafc;border-radius:8px;color:#64748b;text-align:center;">Brak zadań dla tego pacjenta</div>';
+    } else {
+      const now = new Date();
+      tasksEl.innerHTML = tasks
+        .sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate))
+        .map(t => {
+          const isCompleted = t.status === 'completed';
+          const dueDate = t.dueDate ? new Date(t.dueDate) : null;
+          const isOverdue = dueDate && dueDate < now && !isCompleted;
+          const cls = isCompleted ? 'completed' : (isOverdue ? 'overdue' : '');
+          const dueDateStr = dueDate
+            ? dueDate.toLocaleDateString('pl-PL', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+            : '—';
+          return `<div class="pc-task-row ${cls}">
+            <div class="pc-task-title">
+              ${isCompleted ? '✅' : isOverdue ? '🔴' : '🔵'} ${escHtml(t.title || 'Zadanie')}
+            </div>
+            ${t.body ? `<div style="font-size:12px;color:#64748b;margin-top:3px;">${escHtml(t.body)}</div>` : ''}
+            <div class="pc-task-meta">
+              Termin: ${dueDateStr}
+              ${t.assignedTo ? ` • Przypisane: ${escHtml(t.assignedTo)}` : ''}
+              ${isCompleted ? ' • <span style="color:#10b981;">Ukończone</span>' : ''}
+              ${isOverdue   ? ' • <span style="color:#ef4444;">Po terminie</span>' : ''}
+            </div>
+          </div>`;
+        }).join('');
+    }
+  } catch (err) {
+    console.error('[Patient Card] Taski:', err);
+    if (tasksEl) tasksEl.innerHTML = `<div style="padding:12px;background:#fef2f2;border-radius:8px;color:#ef4444;text-align:center;">Błąd ładowania zadań: ${err.message}</div>`;
   }
 }
 
