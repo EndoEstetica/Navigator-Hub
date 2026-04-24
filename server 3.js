@@ -1182,7 +1182,7 @@ function mapTaskRow(row) {
     dueDate: row.due_date,
     assignedTo: row.assigned_to,
     assignedToName: row.assigned_to_name,
-    status: row.status || 'pending',
+    status: row.status || 'open',
     pool: row.pool || false,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -1208,7 +1208,7 @@ app.post('/api/tasks', async (req, res) => {
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
         assigned_to: isPool ? null : (assignedTo || null),
         assigned_to_name: assignedUser?.name || null,
-        status: 'pending',
+        status: 'open',
         pool: isPool,
         created_by: userId
       }).select().single();
@@ -1218,7 +1218,7 @@ app.post('/api/tasks', async (req, res) => {
       // Fallback RAM
       const taskId = `task_${taskIdCounter++}`;
       task = { id: taskId, title, description, contactId, contactName, dueDate,
-        assignedTo: isPool ? null : (assignedTo || null), status: 'pending',
+        assignedTo: isPool ? null : (assignedTo || null), status: 'open',
         pool: isPool, createdBy: userId, createdAt: new Date().toISOString() };
       tasksPool.set(taskId, task);
     }
@@ -1652,9 +1652,8 @@ app.get('/api/stats', async (req, res) => {
       leadSources[src] = (leadSources[src] || 0) + 1;
     });
 
-    // Statystyki rozszerzone (Reception OS)
+    // Statystyki follow-up (z Supabase)
     let followUpStats = { total: 0, done: 0, overdue: 0, conversionToW0: 0 };
-    let metrics = { leadToFirstCallAvg: 0, firstCallToW0Avg: 0, w0WaitAvg: 0 };
     let avgResponseTimeMins = null;
     let newPatientsCount = 0;
     let firstCallsCount = 0;
@@ -1665,63 +1664,50 @@ app.get('/api/stats', async (req, res) => {
         const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
         const now = new Date().toISOString();
 
-        // 1. Follow-up tasks & conversion
+        // Follow-up tasks
         const { data: fuTasks } = await supabase.from('tasks')
-          .select('status, completed_at, due_date, contact_id')
+          .select('status, completed_at, due_date')
           .eq('task_type', 'follow_up_call')
           .gte('created_at', since);
-        
         if (fuTasks) {
           followUpStats.total = fuTasks.length;
-          followUpStats.done = fuTasks.filter(t => t.status === 'done').length;
-          followUpStats.overdue = fuTasks.filter(t => t.status !== 'done' && new Date(t.due_date) < new Date()).length;
-          
-          // Konwersja follow-up -> W0
-          const fuContactIds = fuTasks.map(t => t.contact_id);
-          if (fuContactIds.length > 0) {
-            const { data: converted } = await supabase.from('events')
-              .select('contact_id')
-              .eq('event_type', 'w0_scheduled')
-              .in('contact_id', fuContactIds);
-            const uniqueConverted = new Set(converted?.map(e => e.contact_id)).size;
-            followUpStats.conversionToW0 = fuTasks.length > 0 ? Math.round((uniqueConverted / fuTasks.length) * 100) : 0;
-          }
+          followUpStats.done = fuTasks.filter(t => t.status === 'completed').length;
+          followUpStats.overdue = fuTasks.filter(t => t.status !== 'completed' && new Date(t.due_date) < new Date()).length;
         }
 
-        // 2. Metryki czasu (Lead -> First Call -> W0)
+        // Czas reakcji (avg)
         const { data: contactsData } = await supabase.from('contacts')
-          .select('response_time_minutes, lead_to_w0_days, w0_wait_days, is_new_patient')
-          .gte('updated_at', since);
-
-        if (contactsData) {
-          const respTimes = contactsData.map(c => c.response_time_minutes).filter(t => t != null);
-          metrics.leadToFirstCallAvg = respTimes.length > 0 ? Math.round(respTimes.reduce((a,b) => a+b, 0) / respTimes.length) : 0;
-          avgResponseTimeMins = metrics.leadToFirstCallAvg;
-          
-          const l2w0Times = contactsData.map(c => c.lead_to_w0_days).filter(t => t != null);
-          metrics.firstCallToW0Avg = l2w0Times.length > 0 ? Math.round(l2w0Times.reduce((a,b) => a+b, 0) / l2w0Times.length) : 0;
-          
-          const waitTimes = contactsData.map(c => c.w0_wait_days).filter(t => t != null);
-          metrics.w0WaitAvg = waitTimes.length > 0 ? Math.round(waitTimes.reduce((a,b) => a+b, 0) / waitTimes.length) : 0;
-          
+          .select('response_time_minutes, is_new_patient')
+          .not('response_time_minutes', 'is', null)
+          .gte('first_call_at', since);
+        if (contactsData && contactsData.length > 0) {
+          const times = contactsData.map(c => c.response_time_minutes).filter(t => t > 0);
+          avgResponseTimeMins = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
           newPatientsCount = contactsData.filter(c => c.is_new_patient).length;
         }
 
-        // 3. Powody odwołań (z events)
-        const { data: cancellations } = await supabase.from('events')
-          .select('metadata')
-          .eq('event_type', 'visit_cancelled')
+        // Pierwsze rozmowy
+        const { data: firstCalls } = await supabase.from('calls')
+          .select('id')
+          .eq('call_type', 'first_call')
           .gte('created_at', since);
-        
+        firstCallsCount = firstCalls?.length || 0;
+
+        // Powody odwołań
+        const { data: cancellations } = await supabase.from('calls')
+          .select('cancellation_reason')
+          .not('cancellation_reason', 'is', null)
+          .gte('created_at', since);
         if (cancellations) {
           cancellations.forEach(c => {
-            const reason = c.metadata?.cancellationReason || 'Nieznany';
+            const reason = c.cancellation_reason || 'Nieznany';
             cancellationStats[reason] = (cancellationStats[reason] || 0) + 1;
           });
         }
       } catch(e) { console.warn('[Stats] Supabase error:', e.message); }
     }
-        res.json({
+
+    res.json({
       totalContacts: contacts.length,
       totalOpportunities: opps.length,
       stats: {
@@ -1732,7 +1718,7 @@ app.get('/api/stats', async (req, res) => {
         answeredPercent: answeredPct,
         callbackRate: missed > 0 ? Math.round((callbackDone / missed) * 100) : 100,
         uniquePatients: contacts.length,
-        newLeads: opps.filter(o => o.status === 'pending').length,
+        newLeads: opps.filter(o => o.status === 'open').length,
         // Reception OS metrics
         newPatients: newPatientsCount,
         firstCalls: firstCallsCount,
@@ -2075,33 +2061,6 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
             description: `Odwołanie wizyty. Powód: ${cancellationReason || 'nie podano'}`,
             metadata: { callId, cancellationReason }
           });
-          
-          // Jeśli BRAK nowego terminu -> Automatyczny task follow-up (Reception OS)
-          if (!w0Date) {
-            const followUpDate = new Date();
-            followUpDate.setDate(followUpDate.getDate() + 3); // Domyślnie 3 dni
-            await supabase.from('tasks').insert({
-              title: `Oddzwoń po odwołaniu: ${contactName || 'Pacjent'}`,
-              description: `Pacjent odwołał wizytę. Powód: ${cancellationReason || 'nie podano'}. Brak nowego terminu.`,
-              contact_id: contactId,
-              contact_name: contactName,
-              phone: req.body.phone,
-              due_date: followUpDate.toISOString(),
-              task_type: 'follow_up_call',
-              status: 'pending',
-              pool: true,
-              created_by: 'system'
-            });
-            
-            await supabase.from('events').insert({
-              event_type: 'follow_up_created',
-              contact_id: contactId,
-              contact_name: contactName,
-              user_id: userId,
-              source: 'app',
-              description: `Utworzono auto-task po odwołaniu wizyty`
-            });
-          }
         }
 
         // Logika Automatycznych Zadań: Follow-up

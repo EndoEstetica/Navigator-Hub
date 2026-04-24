@@ -349,43 +349,21 @@
           </div>
 
           <!-- Moje zadania: lista dzienna + kalendarz miesięczny -->
-          <div id="tab-tasks-my" class="tab-content active">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
-              <!-- Lewa: zadania na dziś -->
-              <div>
-                <div style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
-                  Dziś — <span id="tasksTodayDateLabel"></span>
-                </div>
-                <div id="tasksMyList" class="tasks-list">
-                  <div class="loading-state"><div class="spinner"></div><p>Ładowanie...</p></div>
-                </div>
-              </div>
-              <!-- Prawa: kalendarz miesięczny -->
-              <div class="tasks-calendar" id="tasksCalendar">
-                <div class="calendar-header">
-                  <button class="calendar-nav-btn" onclick="calendarPrev()">&#8249;</button>
-                  <h3 id="calendarMonthLabel">Kwiecień 2026</h3>
-                  <button class="calendar-nav-btn" onclick="calendarNext()">&#8250;</button>
-                </div>
-                <div class="calendar-grid" id="calendarGrid">
-                  <!-- Wypełniane przez JS -->
-                </div>
-              </div>
-            </div>
+                    <div id="tab-tasks-my" class="tab-content active">
+            <div id="tasksMyList" class="tasks-list"></div>
           </div>
-
-          <!-- Pula zadań -->
+          <div id="tab-tasks-today" class="tab-content">
+            <div id="tasksTodayListLarge" class="tasks-list"></div>
+          </div>
           <div id="tab-tasks-pool" class="tab-content">
-            <div id="tasksPoolList" class="tasks-list">
-              <div class="empty-state">Brak zadań w puli</div>
-            </div>
+            <div id="tasksPoolList" class="tasks-list"></div>
           </div>
-
-          <!-- Wszystkie zadania -->
           <div id="tab-tasks-all" class="tab-content">
-            <div id="tasksAllList" class="tasks-list">
-              <div class="empty-state">Brak zadań</div>
-            </div>
+            <div id="tasksAllList" class="tasks-list"></div>
+          </div>
+          <div id="tab-tasks-archive" class="tab-content">
+            <div id="tasksArchiveList" class="tasks-list"></div>
+          </div>
           </div>
         </div>
       </div>
@@ -508,7 +486,34 @@
             <canvas id="leadSourcesChart" width="200" height="200"></canvas>
           </div>
           <!-- Podział per stanowisko — tylko admin -->
-          <div id="agentBreakdownSection" style="display:none;grid-column:1/-1;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:8px;">
+          
+        <!-- Metryki Operacyjne (Reception OS) -->
+        <div style="grid-column: 1/-1; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+          <h3 style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 12px 0;">🚀 Metryki Skuteczności i Czasu</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Lead → Pierwszy kontakt</div>
+              <div id="metric-lead-first" style="font-size: 24px; font-weight: 800; color: #3b82f6; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (minuty)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Pierwszy kontakt → W0</div>
+              <div id="metric-first-w0" style="font-size: 24px; font-weight: 800; color: #10b981; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (dni)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Oczekiwanie na wizytę</div>
+              <div id="metric-w0-wait" style="font-size: 24px; font-weight: 800; color: #f59e0b; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">średni czas (dni)</div>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; text-align: center;">
+              <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Konwersja Follow-up</div>
+              <div id="metric-fu-conv" style="font-size: 24px; font-weight: 800; color: #8b5cf6; margin: 4px 0;">—</div>
+              <div style="font-size: 11px; color: #94a3b8;">skuteczność zapisu (%)</div>
+            </div>
+          </div>
+        </div>
+<div id="agentBreakdownSection" style="display:none;grid-column:1/-1;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:8px;">
           </div>
           <div class="stats-table-section">
             <h3>📋 Powody odwołań</h3>

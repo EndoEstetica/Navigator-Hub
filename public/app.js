@@ -253,57 +253,39 @@ function updateKPIs(data) {
 }
 
 function updateDashboardLists(calls) {
-  // Zachowaj stary liveFeedList i callbackList dla kompatybilności
   const liveFeedEl = document.getElementById('liveFeedList');
   const callbackEl = document.getElementById('callbackList');
-  if (liveFeedEl) liveFeedEl.innerHTML = '';
-  if (callbackEl) callbackEl.innerHTML = '';
-
-  // Nowe listy z podziałem
-  loadCallbackList(calls);
-}
-
-function loadCallbackList(callsData) {
-  const missedEl = document.getElementById('callbackMissedList');
-  const ineffectiveEl = document.getElementById('callbackIneffectiveList');
-  const badgeCb = document.getElementById('badge-callback');
-  const badgeMissed = document.getElementById('badge-missed-cb');
-  const badgeIneff = document.getElementById('badge-ineffective-cb');
-  if (!missedEl || !ineffectiveEl) return;
-
-  // Użyj przekazanych danych lub allCalls
-  const calls = callsData && Array.isArray(callsData) ? callsData : allCalls;
-
-  const missed = calls.filter(c => c.tag === 'missed' || c.status === 'missed');
-  const ineffective = calls.filter(c => (c.tag === 'ineffective' || c.status === 'ineffective') && c.direction === 'outbound');
-
-  const renderCallbackItem = (c) => `
-    <div class="callback-item">
-      <div class="callback-item-avatar ${c.tag === 'missed' ? 'avatar-missed' : 'avatar-ineffective'}">
-        ${(c.contactName || c.from || '?')[0].toUpperCase()}
+  if (!liveFeedEl || !callbackEl) return;
+  
+  // ⚡ Live Feed
+  const recent = calls.slice(0, 10);
+  liveFeedEl.innerHTML = recent.length ? recent.map(c => `
+    <div class="live-feed-item">
+      <div class="feed-icon" style="background: ${c.direction === 'inbound' ? '#dbeafe' : '#f1f5f9'}; color: ${c.direction === 'inbound' ? '#3b82f6' : '#64748b'};">
+        ${c.direction === 'inbound' ? '📥' : '📤'}
       </div>
-      <div class="callback-item-info">
-        <div class="callback-item-name">${escHtml(c.contactName || c.from || 'Nieznany')}</div>
-        <div class="callback-item-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} · ${new Date(c.timestamp).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' })}</div>
+      <div class="feed-content">
+        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
+        <div class="feed-time">${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${c.direction === 'inbound' ? 'Przychodzące' : 'Wychodzące'}</div>
       </div>
-      <button class="btn-callback-call" onclick="initiateCall('${escHtml(c.from || '')}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">
-        &#128222; Oddzwoń
-      </button>
+      <div class="status-badge status-${c.tag || 'connected'}">${c.tag === 'missed' ? 'Nieodebrane' : c.tag === 'ineffective' ? 'Bez odbioru' : 'Połączono'}</div>
     </div>
-  `;
-
-  missedEl.innerHTML = missed.length
-    ? missed.slice(0, 15).map(renderCallbackItem).join('')
-    : '<div class="empty-state-sm">Brak nieodebranych</div>';
-
-  ineffectiveEl.innerHTML = ineffective.length
-    ? ineffective.slice(0, 15).map(renderCallbackItem).join('')
-    : '<div class="empty-state-sm">Brak nieskutecznych</div>';
-
-  const total = missed.length + ineffective.length;
-  if (badgeCb) badgeCb.textContent = total;
-  if (badgeMissed) badgeMissed.textContent = missed.length;
-  if (badgeIneff) badgeIneff.textContent = ineffective.length;
+  `).join('') : '<div class="empty-state">Oczekiwanie na aktywność...</div>';
+  
+  // 📞 Lista do oddzwonienia
+  const toCall = calls.filter(c => c.tag === 'missed' || c.tag === 'ineffective').slice(0, 10);
+  callbackEl.innerHTML = toCall.length ? toCall.map(c => `
+    <div class="live-feed-item">
+      <div class="feed-icon" style="background: ${c.tag === 'missed' ? '#fee2e2' : '#fef3c7'}; color: ${c.tag === 'missed' ? '#ef4444' : '#d97706'};">
+        ${c.tag === 'missed' ? '🔴' : '🟡'}
+      </div>
+      <div class="feed-content">
+        <div class="feed-title">${escHtml(c.contactName || c.from)}</div>
+        <div class="feed-time">${c.tag === 'missed' ? 'Nieodebrane' : 'Nieskuteczne'} • ${new Date(c.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
+      </div>
+      <button class="btn-primary" style="padding: 4px 12px; font-size: 11px;" onclick="initiateCall('${c.from}', '${escHtml(c.contactName || '')}', '${c.contactId || ''}')">Oddzwoń</button>
+    </div>
+  `).join('') : '<div class="empty-state">Brak pacjentów do kontaktu</div>';
 }
 
 let statsDonutChart = null;
@@ -782,37 +764,26 @@ function handleCallRinging(data) {
 
   if (currentView === 'calls') renderCallsTable(allCalls);
 
-  // Otwórz popup tylko dla właściwego agenta (po userId)
-  // Admin widzi wszystkie połączenia, ale popup tylko dla swojego ext
-  const myUserId = currentUser?.id;
-  const myRole = currentUser?.role;
-  // Sprawdź czy to połączenie należy do tego użytkownika
-  // data.userId jest ustawiane przez serwer na podstawie activeExtMap
-  const isMyCall = !data.userId || // stare połączenia bez userId → pokaż wszystkim recepcji
-    data.userId === myUserId ||     // moje połączenie
-    myRole === 'admin';             // admin widzi wszystko
-
-  if (isMyCall) {
-    if (data.direction === 'inbound') {
-      openCallPopup({
-        id: data.contactId || 'unknown',
-        name: data.contactName || data.from || 'Nieznany',
-        phone: data.from,
-        callId: data.callId,
-        direction: 'inbound'
-      });
-    } else {
-      // Wychodzące — otwórz popup bez dzwonienia
-      openCallPopup({
-        id: data.contactId || 'unknown',
-        name: data.contactName || data.to || 'Nieznany',
-        phone: data.to,
-        callId: data.callId,
-        direction: 'outbound'
-      });
-    }
-    activeCallId = data.callId;
+  // Otwórz popup dla połączeń przychodzących
+  if (data.direction === 'inbound') {
+    openCallPopup({
+      id: data.contactId || 'unknown',
+      name: data.contactName || data.from || 'Nieznany',
+      phone: data.from,
+      callId: data.callId,
+      direction: 'inbound'
+    });
+  } else {
+    // Wychodzące — otwórz popup bez dzwonienia
+    openCallPopup({
+      id: data.contactId || 'unknown',
+      name: data.contactName || data.to || 'Nieznany',
+      phone: data.to,
+      callId: data.callId,
+      direction: 'outbound'
+    });
   }
+  activeCallId = data.callId;
 }
 
 function handleCallAnswered(data) {
@@ -1000,10 +971,19 @@ function renderLeadsList(leads) {
   const allSources = [...new Set(leads.flatMap(l => [...(l.tags || []), l.source].filter(Boolean)))];
   renderSourceFilters(allSources);
 
+  // Ustaw kontener na rzędy
+  listEl.style.display = 'flex';
+  listEl.style.flexDirection = 'column';
+  listEl.style.gap = '12px';
   
   listEl.innerHTML = '';
   filtered.forEach(lead => {
     const card = createLeadCard(lead);
+    // Dostosuj kartę do układu rzędowego
+    card.style.display = 'flex';
+    card.style.alignItems = 'center';
+    card.style.width = '100%';
+    card.style.padding = '12px 20px';
     listEl.appendChild(card);
   });
 }
@@ -1051,86 +1031,56 @@ function getLeadAgeLabel(createdAt) {
   const ageMin = Math.floor(ageMs / 60000);
   const ageH = Math.floor(ageMin / 60);
   const ageM = ageMin % 60;
-  const exactTime = ageMin < 60 ? `${ageMin} min` : `${ageH}h ${ageM}m`;
-  let cls, icon, label;
-  if (ageMin < 15) {
-    cls = 'age-ok';
-    icon = '\uD83D\uDFE2'; // 🟢 zielone koło
-    label = 'Świeże';
-  } else if (ageMin < 120) {
-    cls = 'age-warn';
-    icon = '\uD83D\uDFE1'; // 🟡 żółte koło
-    label = 'Oczekuje';
-  } else {
-    cls = 'age-critical';
-    icon = '\uD83D\uDD34'; // 🔴 czerwone koło
-    label = 'Pilne';
-  }
-  return `<span class="lead-age ${cls}" title="Czas oczekiwania: ${exactTime}">${icon} ${label}</span>`;
+
+  let cls = 'age-ok';
+  let label = ageMin < 60 ? `${ageMin} min` : `${ageH}h ${ageM}m`;
+
+  if (ageMin >= 15 && ageMin < 120) cls = 'age-warn';
+  if (ageMin >= 120) { cls = 'age-critical'; }
+
+  return `<span class="lead-age ${cls}">${label}</span>`;
 }
 
 function createLeadCard(lead) {
   const div = document.createElement('div');
-  div.className = 'lead-card-v2';
+  div.className = 'lead-card';
+  div.style.display = 'flex';
+  div.style.alignItems = 'center';
+  div.style.gap = '20px';
+  div.style.padding = '12px 24px';
 
   const sourceTags = [...new Set([...(lead.tags || []), lead.source].filter(Boolean))];
   const sourceTagsHtml = sourceTags.map(t => getSourceLabel(t)).join('');
   const ageHtml = getLeadAgeLabel(lead.createdAt);
-  const isAdmin = currentUserRole === 'admin';
-
-  // Awatar — inicjały z kolorem zależnym od źródła
-  const initials = (lead.name || 'P').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-  const avatarColors = [
-    ['#dbeafe','#1d4ed8'], ['#dcfce7','#15803d'], ['#fce7f3','#be185d'],
-    ['#fef3c7','#92400e'], ['#ede9fe','#6d28d9'], ['#ffedd5','#c2410c']
-  ];
-  const colorIdx = (lead.name || 'P').charCodeAt(0) % avatarColors.length;
-  const [bgColor, textColor] = avatarColors[colorIdx];
-
-  // Numer telefonu
-  const phoneDisplay = lead.phone
-    ? `<span class="lc-phone">&#128222; ${escHtml(lead.phone)}</span>`
-    : `<span class="lc-phone lc-no-phone">Brak numeru</span>`;
-
-  // ID
-  const idDisplay = lead.id ? `<span class="lc-id">ID: #${String(lead.id).slice(-4)}</span>` : '';
-
-  // Problem pacjenta
-  const problemHtml = lead.zglosza
-    ? `<div class="lc-problem"><span class="lc-problem-label">PROBLEM PACJENTA</span><div class="lc-problem-text">${escHtml(lead.zglosza)}</div></div>`
+  const stageHtml = lead.stageName
+    ? `<span class="lead-stage-tag" style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(lead.stageName)}</span>`
     : '';
-
-  // Przyciski — Zadzwoń dla wszystkich, Raport i Usuń tylko dla admina
-  const callBtn = lead.phone
-    ? `<button class="lc-btn-call" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">&#128222; Zadzwoń</button>`
-    : '';
-  const reportBtn = isAdmin
-    ? `<button class="lc-btn-report" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">&#128203; Raport</button>`
-    : '';
-  const deleteBtn = isAdmin
-    ? `<button class="lc-btn-delete" onclick="deleteLead('${lead.id}', this)">&#10005; Usuń</button>`
-    : '';
+  const phoneHtml = lead.phone
+    ? `<div class="lead-phone" style="font-weight:600; color:#3b82f6;">📞 ${lead.phone}</div>`
+    : `<div class="lead-phone no-phone" style="color:#94a3b8;">Brak numeru</div>`;
 
   div.innerHTML = `
-    <div class="lc-header">
-      <div class="lc-avatar" style="background:${bgColor}; color:${textColor};">${initials}</div>
-      <div class="lc-name-row">
-        <span class="lc-name">${escHtml(lead.name || 'Nieznany')}</span>
-        ${sourceTagsHtml}
-      </div>
-      <div class="lc-age">${ageHtml}</div>
+    <div class="lead-avatar" style="width:40px; height:40px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center; font-weight:700; color:#475569; flex-shrink:0;">
+      ${(lead.name || 'P').charAt(0).toUpperCase()}
     </div>
-    ${problemHtml}
-    <div class="lc-footer">
-      <div class="lc-meta">
-        ${phoneDisplay}
-        ${idDisplay}
+    <div class="lead-info" style="flex:1; display:flex; align-items:center; gap:24px;">
+      <div style="min-width:180px;">
+        <div class="lead-name" style="font-weight:700; color:#1e293b; font-size:15px;">${escHtml(lead.name)}</div>
+        <div style="display:flex; gap:6px; margin-top:4px;">${stageHtml}${ageHtml}</div>
       </div>
-      <div class="lc-actions">
-        ${reportBtn}
-        ${deleteBtn}
-        ${callBtn}
+      <div style="min-width:140px;">${phoneHtml}</div>
+      <div style="flex:1; min-width:0;">
+        ${lead.zglosza
+          ? `<div style="font-size:13px; color:#1e293b; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; padding:4px 10px; background:#f0f9ff; border-left:3px solid #3b82f6; border-radius:0 6px 6px 0;" title="${escHtml(lead.zglosza)}">"​${escHtml(lead.zglosza)}"</div>`
+          : '<div style="font-size:12px;color:#cbd5e1;">Brak opisu</div>'}
       </div>
+      <div style="display:flex; gap:4px;">${sourceTagsHtml}</div>
+    </div>
+    <div class="lead-actions" style="display:flex; gap:8px; flex-shrink:0;">
+      ${lead.phone ? `<button class="btn-call" style="padding:6px 12px;" onclick="initiateCall('${escHtml(lead.phone)}', '${escHtml(lead.name)}', '${lead.contactId}', '${lead.id}')">📞</button>` : ''}
+      <button class="btn-report" style="padding:6px 12px; font-size:12px;" onclick="openCallPopupForLead('${lead.contactId}', '${escHtml(lead.name)}', '${escHtml(lead.phone)}', '${escHtml(lead.zglosza)}', '${lead.id}')">📋 Raport</button>
+      <button class="btn-edit edit-request-btn" style="padding:6px 12px; font-size:12px;" onclick="openEditRequest('${lead.contactId}', '${escHtml(lead.name)}')">✏️</button>
+      <button class="btn-delete admin-only" style="display:${currentUserRole === 'admin' ? 'inline-flex' : 'none'}; padding:6px 12px;" onclick="deleteLead('${lead.id}', this)">✕</button>
     </div>
   `;
   return div;
@@ -1607,17 +1557,6 @@ function openCallPopup(contact) {
     if (zBox) zBox.classList.add('hidden');
     if (contact.id && contact.id !== 'unknown') fetchContactZglosza(contact.id);
   }
-  // Wyczyść i załaduj wzbogacone dane popupu (etap GHL, W0, ostatnia notatka)
-  const enrichSection = document.getElementById('popupEnrichSection');
-  if (enrichSection) { enrichSection.classList.add('hidden'); enrichSection.style.display = 'none'; }
-  ['popupStageRow','popupW0Row','popupLastNoteRow'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
-  });
-  if (contact.id && contact.id !== 'unknown') {
-    // Pobierz wzbogacone dane asynchronicznie (nie blokuje otwarcia popupu)
-    fetchPopupEnrichment(contact.id);
-  }
 
   // Ustawienie nazwy pacjenta w polu manualnym (jeśli mamy ją z obiektu połączenia)
   const manualNameInput = document.getElementById('manualPatientName');
@@ -1707,67 +1646,6 @@ async function fetchContactZglosza(contactId) {
   } catch (err) { console.error('Fetch zglosza error:', err); }
 }
 
-async function fetchPopupEnrichment(contactId) {
-  try {
-    const response = await fetch(`/api/contact/${contactId}/popup`);
-    if (!response.ok) return;
-    const data = await response.json();
-    const enrichSection = document.getElementById('popupEnrichSection');
-    if (!enrichSection) return;
-    enrichSection.classList.remove('hidden');
-    enrichSection.style.display = 'flex';
-    // Etap GHL
-    if (data.stageName) {
-      const stageRow = document.getElementById('popupStageRow');
-      const stageName = document.getElementById('popupStageName');
-      if (stageRow) stageRow.classList.remove('hidden');
-      if (stageName) stageName.textContent = data.stageName;
-    }
-    // W0
-    if (data.w0_scheduled && data.w0_date) {
-      const w0Row = document.getElementById('popupW0Row');
-      const w0Info = document.getElementById('popupW0Info');
-      if (w0Row) w0Row.classList.remove('hidden');
-      if (w0Info) {
-        const w0DateStr = new Date(data.w0_date).toLocaleDateString('pl-PL', { day: '2-digit', month: 'short', year: 'numeric' });
-        w0Info.textContent = `${w0DateStr}${data.w0_doctor ? ` — dr ${data.w0_doctor}` : ''}`;
-      }
-      // Aktualizuj blokadę W0 w raporcie
-      if (currentContact) currentContact.w0_scheduled = true;
-      const w0Notice = document.getElementById('w0BlockNotice');
-      const newPatientTile = document.getElementById('tile-NOWY_PACJENT');
-      if (w0Notice && newPatientTile) {
-        w0Notice.classList.remove('hidden');
-        newPatientTile.style.opacity = '0.4';
-        newPatientTile.style.cursor = 'not-allowed';
-        newPatientTile.title = 'Ten pacjent ma już zaplanowane W0';
-      }
-    }
-    // Ostatnia notatka
-    if (data.lastNote?.text) {
-      const noteRow = document.getElementById('popupLastNoteRow');
-      const noteText = document.getElementById('popupLastNoteText');
-      if (noteRow) noteRow.classList.remove('hidden');
-      if (noteText) noteText.textContent = data.lastNote.text.slice(0, 120) + (data.lastNote.text.length > 120 ? '…' : '');
-    }
-    // Uzupełnij zglosza jeśli nie było
-    if (data.zglosza) {
-      const zEl = document.getElementById('popupZglosza');
-      if (zEl && (!zEl.textContent || zEl.textContent === '—')) zEl.textContent = data.zglosza;
-      const zBox = document.getElementById('popupZCzymSieZglasza');
-      if (zBox) zBox.classList.remove('hidden');
-    }
-    // Aktualizuj currentContact z danymi z popup
-    if (currentContact && data.opportunityId) {
-      currentContact.opportunityId = data.opportunityId;
-      if (!currentOpportunity) currentOpportunity = { id: data.opportunityId };
-    }
-    if (currentContact) {
-      currentContact.lead_created_at = currentContact.lead_created_at || data.lead_created_at;
-    }
-  } catch (err) { console.error('[Popup Enrichment] Error:', err); }
-}
-
 function answerCall() {
   // Potwierdź odebranie — uruchom timer od teraz
   const tagEl = document.getElementById('popupCallTag');
@@ -1807,48 +1685,24 @@ function calculateDelayInDays(targetDateStr) {
 }
 
 function closeCallPopup(force = false) {
-  // Sprawdź czy połączenie jest aktywne (dzwoni lub trwa)
-  const callInStore = activeCallId ? allCalls.find(c => c.callId === activeCallId) : null;
-  const isCallActive = callInStore && (callInStore.status === 'ringing' || callInStore.status === 'active');
-
-  // Jeśli połączenie aktywne i nie wymuszamy zamknięcia → minimalizuj zamiast zamykać
-  if (!force && isCallActive) {
-    minimizeCallPopup();
-    return;
-  }
-
-  // Ostrzeżenie jeśli raport nieuzupełniony (punkt 6) — tylko dla zakończonych połączeń
+  // Ostrzeżenie jeśli raport nieuzupełniony (punkt 6)
   if (!force && activeCallId && !selectedStatus) {
-    if (callInStore?.tag === 'connected') {
+    const callInStore = allCalls.find(c => c.callId === activeCallId);
+    // Tylko dla zakończonych połączeń, które trwały (nie missed/ineffective)
+    if (callInStore?.tag === 'connected' || callInStore?.status === 'active') {
       if (!confirm('⚠️ Raport nieuzupełniony — czy na pewno chcesz wyjść?\n\nMożesz wrócić do raportu z widoku Połączenia.')) {
         return;
       }
+      // Dodaj do listy niedokończonych raportów
       addPendingReport(activeCallId, callInStore?.contactName || callInStore?.from);
     }
   }
   document.getElementById('callPopup').classList.add('hidden');
-  const popup = document.getElementById('callPopup');
-  if (popup) popup.classList.remove('minimized');
   stopCallTimer();
   currentContact = null;
   selectedStatus = null;
   selectedOutcome = null;
   activeCallId = null;
-}
-
-// Minimalizuj popup połączenia (widoczny jako pasek na dole)
-function minimizeCallPopup() {
-  const popup = document.getElementById('callPopup');
-  if (!popup) return;
-  popup.classList.add('minimized');
-  showToast('Połączenie aktywne — kliknij pasek aby wrócić', 'info');
-}
-
-// Przywróć popup z minimalizacji
-function restoreCallPopup() {
-  const popup = document.getElementById('callPopup');
-  if (!popup) return;
-  popup.classList.remove('minimized');
 }
 
 // Lista niedokończonych raportów (punkt 6 — przypomnienia)
@@ -3767,51 +3621,24 @@ async function openPatientCard(contactId, contactName) {
       marketingEl.style.color = contact.marketingConsent ? '#10b981' : '#ef4444';
     }
     
-    // Wypełnij ujednolicony Timeline (zakładka 1)
-    const unifiedTimeline = data.unifiedTimeline || [];
-    const legacyTimeline = data.timeline || [];
+    // Wypełnij timeline GHL (zakładka 1)
+    const timeline = data.timeline || [];
     const callHistory = data.callHistory || [];
     const timelineEl = document.getElementById('patientCardTimeline');
     
-    const allEvents = unifiedTimeline.length > 0 ? unifiedTimeline : legacyTimeline.map(a => ({
-      id: a.id, type: a.type, source: 'ghl', description: a.description || a.type,
-      createdAt: a.createdAt, userId: a.userId, userName: a.userName
-    }));
-    
-    const EVENT_COLORS = {
-      visit_cancelled: '#ef4444', follow_up_created: '#f59e0b', first_call: '#3b82f6',
-      w0_scheduled: '#10b981', ghl_note: '#8b5cf6', task_assigned: '#f97316', other: '#94a3b8'
-    };
-    const EVENT_LABELS = {
-      visit_cancelled: 'Odwołanie wizyty', follow_up_created: 'Follow-up', first_call: 'Pierwszy kontakt',
-      w0_scheduled: 'W0 umówione', ghl_note: 'Notatka GHL', task_assigned: 'Zadanie', other: 'Zdarzenie'
-    };
-    
-    if (allEvents.length === 0) {
-      timelineEl.innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Brak zdarzeń w historii</div>';
+    if (timeline.length === 0) {
+      timelineEl.innerHTML = '<div style="padding: 12px; background: #f8fafc; border-radius: 8px; color: #64748b; text-align: center;">Brak aktywności GHL</div>';
     } else {
-      timelineEl.innerHTML = allEvents.sort((a,b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at)).map(event => {
-        const eventType = event.type || event.event_type || 'other';
-        const color = EVENT_COLORS[eventType] || EVENT_COLORS.other;
-        const label = EVENT_LABELS[eventType] || eventType;
-        const source = event.source || 'app';
-        const sourceBadge = source === 'ghl'
-          ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;">GHL</span>'
-          : '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#f0fdf4;color:#166534;font-weight:700;">APP</span>';
-        const desc = (event.description || '—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        const uname = event.userName ? event.userName.replace(/</g,'&lt;') : '';
-        return '<div style="padding:12px;border-left:3px solid ' + color + ';background:#f8fafc;border-radius:6px;margin-bottom:8px;">'
-          + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-          + '<div style="display:flex;align-items:center;gap:6px;">'
-          + '<span style="font-size:10px;padding:2px 8px;border-radius:12px;background:' + color + '20;color:' + color + ';font-weight:700;">' + label + '</span>'
-          + sourceBadge
-          + '</div>'
-          + '<div style="font-size:11px;color:#94a3b8;">' + new Date(event.createdAt || event.created_at).toLocaleString('pl-PL') + '</div>'
-          + '</div>'
-          + '<div style="font-size:13px;color:#1e293b;margin-top:6px;">' + desc + '</div>'
-          + (uname ? '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Przez: ' + uname + '</div>' : '')
-          + '</div>';
-      }).join('');
+      timelineEl.innerHTML = timeline.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).map(activity => `
+        <div style="padding: 12px; border-left: 3px solid #3b82f6; background: #f8fafc; border-radius: 6px; margin-bottom: 8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-size: 12px; color: #64748b; font-weight: 600;">${new Date(activity.createdAt).toLocaleString('pl-PL')}</div>
+            <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #dbeafe; color: #1e40af; font-weight: 700; text-transform: uppercase;">GHL</span>
+          </div>
+          <div style="font-size: 13px; color: #1e293b; margin-top: 4px;">${activity.description || activity.type || '—'}</div>
+          ${activity.userName ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Przez: ${activity.userName}</div>` : ''}
+        </div>
+      `).join('');
     }
     
     // Wypełnij historię połączeń z aplikacji (zakładka 2)

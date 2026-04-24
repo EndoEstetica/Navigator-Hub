@@ -4175,3 +4175,17 @@ button {
   50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); opacity: 0.8; }
   100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); opacity: 1; }
 }
+
+/* Urgent Pool Tasks Blinking */
+@keyframes urgentBlink {
+  0% { background-color: #fff; }
+  50% { background-color: #fee2e2; }
+  100% { background-color: #fff; }
+}
+.urgent-blink {
+  animation: urgentBlink 2s infinite;
+  border-left: 4px solid #ef4444 !important;
+}
+.pool-task {
+  border-left: 4px solid #3b82f6;
+}
