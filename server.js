@@ -48,20 +48,20 @@ const ghlHeaders = {
   'Version': '2021-07-28'
 };
 
-// ─── SYSTEM UŻYTKOWNIKÓW (przeniesione wyżej — wymagane przed handlerami) ─────
+// ─── SYSTEM UŻYTKOWNIKÓW (przeniesione wyżej — przed użyciem w handlerach) ───
 const USERS = {
-  kasia:      { id: 'kasia',      name: 'Kasia',         role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
-  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',     role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
-  asia:       { id: 'asia',       name: 'Asia',           role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
-  agata_r:    { id: 'agata_r',    name: 'Agata',          role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',     role: 'reception', ext: '103', ghlUserId: null },
-  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun',  role: 'opiekun',   ext: '101', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
-  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun',  role: 'opiekun',   ext: '102', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
-  bartosz:    { id: 'bartosz',    name: 'Bartosz',        role: 'admin',     ext: null,  ghlUserId: null },
-  sandra:     { id: 'sandra',     name: 'Sandra',         role: 'admin',     ext: null,  ghlUserId: null },
-  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',      role: 'admin',     ext: null,  ghlUserId: null },
-  patrycja:   { id: 'patrycja',   name: 'Patrycja',       role: 'admin',     ext: null,  ghlUserId: null },
-  sonia:      { id: 'sonia',      name: 'Sonia',          role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
+  kasia:      { id: 'kasia',      name: 'Kasia',      role: 'reception', ext: '103', ghlUserId: '3QCy7rl8W0UmUH9eelOe' },
+  agnieszka:  { id: 'agnieszka',  name: 'Agnieszka',  role: 'reception', ext: '103', ghlUserId: 'QGSNWPj1RAflM2oVIkiF' },
+  asia:       { id: 'asia',       name: 'Asia',        role: 'reception', ext: '103', ghlUserId: 'cKLX5NCjigFcAXgtNdn3' },
+  agata_r:    { id: 'agata_r',    name: 'Agata',       role: 'reception', ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  aneta_o:    { id: 'aneta_o',    name: 'Aneta Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'tJ66GMn7OXDBxWWkGis9I' },
+  agata_o:    { id: 'agata_o',    name: 'Agata Opiekun', role: 'opiekun',   ext: '103', ghlUserId: 'gSCZaRsO5fmvUGIAj6AL' },
+  zastepstwo: { id: 'zastepstwo', name: 'Zastępstwo',  role: 'reception', ext: '103', ghlUserId: null },
+  bartosz:    { id: 'bartosz',    name: 'Bartosz',     role: 'admin',     ext: null,  ghlUserId: null },
+  sandra:     { id: 'sandra',     name: 'Sandra',      role: 'admin',     ext: null,  ghlUserId: null },
+  aneta_a:    { id: 'aneta_a',    name: 'Aneta (A)',   role: 'admin',     ext: null,  ghlUserId: null },
+  patrycja:   { id: 'patrycja',   name: 'Patrycja',    role: 'admin',     ext: null,  ghlUserId: null },
+  sonia:      { id: 'sonia',      name: 'Sonia',       role: 'admin',     ext: null,  ghlUserId: GHL_SONIA_USER_ID },
 };
 
 // ─── STAGE IDs LEJKA GHL ──────────────────────────────────────────────────────
@@ -82,35 +82,6 @@ const STAGE_ATTEMPT_1     = '002dbc5a-c6a4-4931-a9a3-af4877b2c525';
 const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
 const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
 const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
-
-// ─── GODZINY PRACY ───────────────────────────────────────────────────────────
-// pon-pt 8:50-17:00, środa 10:50-20:00
-function isOutsideWorkingHours(timestamp) {
-  const d = new Date(timestamp);
-  const day = d.getDay(); // 0=niedz, 1=pon...6=sob
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const time = h * 60 + m; // minuty od północy
-
-  if (day === 0 || day === 6) return true; // weekend
-  if (day === 3) return time < 650 || time >= 1200; // środa 10:50-20:00
-  return time < 530 || time >= 1020; // pon-pt (bez śr) 8:50-17:00
-}
-
-// Wzbogać obiekt połączenia o agentName i outsideWorkingHours
-function enrichCall(c) {
-  // Agent name
-  if (c.userId && USERS[c.userId]) {
-    c.agentName = USERS[c.userId].name;
-  } else if (!c.userId) {
-    c.agentName = null; // nieprzypisane
-  }
-  // Godziny pracy
-  if (c.timestamp) {
-    c.outsideWorkingHours = isOutsideWorkingHours(c.timestamp);
-  }
-  return c;
-}
 
 // ─── In-memory store połączeń (I4: /api/calls) ───────────────────────────────
 // Przechowuje połączenia z ostatnich 7 dni (max 500 rekordów)
@@ -182,6 +153,7 @@ function storeCall(callObj) {
 function getRecentCalls(days = 7) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return callsStore.filter(c => {
+    // Filtr czasowy
     if (new Date(c.timestamp).getTime() <= cutoff) return false;
     // Usuń techniczne wpisy PBX z numerem "0" lub pustym bez przypisanego pacjenta
     const isTechnical = (!c.from || c.from === '0') && (!c.to || c.to === '0') && !c.contactName;
@@ -189,12 +161,13 @@ function getRecentCalls(days = 7) {
   });
 }
 
-// Połączenia z dzisiejszego dnia kalendarzowego (od 00:00 do teraz) — deduplikowane
+// Połączenia z dzisiejszego dnia kalendarzowego (od 00:00 do teraz)
 function getTodayCalls() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayMs = today.getTime();
 
+  // Filtr po dacie kalendarzowej + usunięcie technicznych "0" (tak samo jak getRecentCalls)
   let calls = callsStore.filter(c => {
     const ts = new Date(c.timestamp).getTime();
     if (ts < todayMs) return false;
@@ -202,7 +175,7 @@ function getTodayCalls() {
     return !isTechnical;
   });
 
-  // Deduplikuj po pbxCallId
+  // Deduplikuj po pbxCallId (Zadarma czasem wysyła dwa eventy z różnymi callId dla tego samego połączenia)
   const seenPbxIds = new Set();
   const unique = [];
   for (const c of calls) {
@@ -210,6 +183,7 @@ function getTodayCalls() {
     if (c.pbxCallId) seenPbxIds.add(c.pbxCallId);
     unique.push(c);
   }
+
   return unique;
 }
 
@@ -265,22 +239,6 @@ async function loadCallsFromSupabase() {
 
 // ─── Kolejka retry nagrań (D2) ────────────────────────────────────────────────
 const recordingRetryQueue = new Map(); // callId → { attempts, pbxCallId, contactName }
-
-// Mapa aktywnych użytkowników: ext → userId (aktualizowana przy logowaniu/heartbeat)
-// Jedna osoba na jedno stanowisko jednocześnie
-const activeExtMap = new Map(); // '103' → 'kasia', '101' → 'agata_o', '102' → 'aneta_o'
-
-// Pre-populacja przy starcie serwera — numery DEDYKOWANE (unikalne ext, nie współdzielone)
-// Dzięki temu połączenia opiekunów są przypisywane poprawnie nawet po restarcie Render,
-// bez potrzeby logowania do aplikacji.
-// Ext 103 (recepcja) celowo pomijamy — współdzielony, ustawiany dynamicznie przy logowaniu.
-const SHARED_EXTENSIONS = new Set(['103']);
-Object.values(USERS).forEach(u => {
-  if (u.ext && !SHARED_EXTENSIONS.has(u.ext)) {
-    activeExtMap.set(u.ext, u.id);
-    console.log(`[ActiveExt] Startup: ext ${u.ext} → ${u.id} (${u.name})`);
-  }
-});
 // Strategia retry: 5s, 30s, 1m, 2m, 5m, 10m, 20m, 30m, 60m
 const RETRY_DELAYS = [5000, 30000, 60000, 120000, 300000, 600000, 1200000, 1800000, 3600000];
 
@@ -319,49 +277,31 @@ function verifyZadarmaWebhookSign(params, signature) {
 async function fetchRecordingFromZadarma(pbxCallId) {
   if (!ZADARMA_KEY || !ZADARMA_SECRET) return null;
   
-  // Zadarma API: GET /v1/pbx/record/request/
-  // Parametr: pbx_call_id (permanent ID zewnętrznego połączenia)
-  // Odpowiedź: { status: "success", link: "...", links: [...], lifetime_till: "..." }
-  const endpoint = '/v1/pbx/record/request/';
+  // Endpointy Zadarma do pobierania nagrań
+  const endpoints = ['/v1/pbx/record/request/', '/v1/pbx/record/download/'];
   
-  // Próbuj z pbx_call_id (główny parametr)
-  const paramSets = [
-    { pbx_call_id: pbxCallId },
-    { call_id: pbxCallId }
-  ];
-  
-  for (const params of paramSets) {
+  for (const endpoint of endpoints) {
     try {
+      const params = { call_id: pbxCallId };
       const sign = zadarmaSign(endpoint, params);
       const sorted = {}; Object.keys(params).sort().forEach(k => sorted[k] = params[k]);
       const qs = new URLSearchParams(sorted).toString();
       
-      console.log(`[Recording] Attempting ${endpoint} with params: ${qs}`);
+      console.log(`[Recording] Attempting fetch from ${endpoint} for pbxCallId: ${pbxCallId}`);
       
       const response = await axios.get(
         `https://api.zadarma.com${endpoint}?${qs}`,
         { headers: { 'Authorization': zadarmaAuthHeader(sign) }, timeout: 15000 }
       );
       
-      const data = response.data;
-      // Zadarma zwraca: link (string) lub links (array) 
-      const url = (Array.isArray(data?.links) && data.links.length > 0)
-        ? data.links[0]
-        : (data?.link || null);
-        
+      const url = response.data?.links?.[0] || response.data?.link || response.data?.url || null;
       if (url) {
-        console.log(`[Recording] SUCCESS for ${pbxCallId}: ${url}`);
+        console.log(`[Recording] SUCCESS: Found via ${endpoint} for ${pbxCallId}: ${url}`);
         return url;
       }
-      
-      if (data?.status === 'success' && !url) {
-        console.log(`[Recording] API returned success but no link for ${pbxCallId}:`, JSON.stringify(data));
-      }
     } catch (e) {
-      const status = e.response?.status;
       const errorMsg = e.response?.data?.message || e.response?.data?.error || e.message;
-      console.log(`[Recording] ${endpoint} (${JSON.stringify(params)}) → HTTP ${status}: ${errorMsg}`);
-      // Nie przerywaj — spróbuj z drugim zestawem parametrów
+      console.log(`[Recording] INFO: ${endpoint} for ${pbxCallId} not ready yet: ${errorMsg}`);
     }
   }
   return null;
@@ -500,11 +440,6 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(raw);
       if (msg.type === 'CHAT_MESSAGE') {
         broadcast({ type: 'CHAT_MESSAGE', from: msg.from, text: msg.text, ts: new Date().toISOString() });
-      }
-      // Klient prosi o odświeżenie historii po reconnect
-      if (msg.type === 'GET_CALLS_HISTORY') {
-        const days = msg.days || 1;
-        ws.send(JSON.stringify({ type: 'CALLS_HISTORY', calls: getRecentCalls(days).slice(0, 50) }));
       }
     } catch(e) {}
   });
@@ -732,7 +667,8 @@ app.post('/api/contact/:id/task', async (req, res) => {
   }
 });
 
-// Prośba o edycję kontaktu → pełna wersja z Supabase zdefiniowana w sekcji EDIT REQUESTS
+// Prośba o edycję kontaktu → pełna wersja z Supabase zdefiniowana niżej (sekcja EDIT REQUESTS)
+// UWAGA: usunięto zduplikowany endpoint — właściwy jest w sekcji EDIT REQUESTS (~linia 2093)
 
 // Usuń opportunity (B6 — tylko admin)
 app.delete('/api/opportunity/:id', async (req, res) => {
@@ -765,35 +701,13 @@ app.patch('/api/opportunity/:id', async (req, res) => {
 
 // ─── POŁĄCZENIA (I4: /api/calls) ──────────────────────────────────────────────
 
-// Połączenia — domyślnie 7 dni, z parametrem today=1 → dzisiejszy dzień kalendarzowy
+// Wszystkie połączenia — domyślnie 7 dni, z parametrem today=1 → dzisiejszy dzień kalendarzowy
 app.get('/api/calls', (req, res) => {
-  const { userId, role } = req.query;
-  let calls;
   if (req.query.today === '1' || req.query.today === 'true') {
-    calls = getTodayCalls();
-  } else {
-    const days = parseInt(req.query.days) || 7;
-    calls = getRecentCalls(days);
+    return res.json({ calls: getTodayCalls() });
   }
-  
-  // Recepcja widzi WSZYSTKIE połączenia (nie filtrujemy po ext)
-  // Opiekunowie widzą tylko swoje
-  if (role !== 'admin' && userId) {
-    const user = USERS[userId];
-    if (user && user.role === 'opiekun') {
-      calls = calls.filter(c => {
-        if (c.userId === userId) return true;
-        const from = String(c.from || '');
-        const to = String(c.to || '');
-        return from === user.ext || to === user.ext;
-      });
-    }
-  }
-  
-  // Wzbogać o agentName i outsideWorkingHours
-  calls = calls.map(enrichCall);
-  
-  res.json({ calls });
+  const days = parseInt(req.query.days) || 7;
+  res.json({ calls: getRecentCalls(days) });
 });
 
 // Diagnostyka połączeń (I6)
@@ -848,40 +762,6 @@ app.get('/api/call/:callId/recording', async (req, res) => {
   }
 
   res.json({ url: null });
-});
-
-// Proxy nagrania — zawsze pobiera świeży link z Zadarma (linki tymczasowe wygasają)
-app.get('/api/call/:callId/recording/proxy', async (req, res) => {
-  const { callId } = req.params;
-  const call = callsStore.find(c => c.callId === callId);
-  
-  // Znajdź pbxCallId (potrzebny do Zadarma API)
-  let pbxCallId = call?.pbxCallId;
-  if (!pbxCallId && supabase) {
-    try {
-      const { data } = await supabase.from('calls')
-        .select('pbx_call_id')
-        .eq('call_id', callId)
-        .single();
-      pbxCallId = data?.pbx_call_id;
-    } catch(e) { /* kontynuuj */ }
-  }
-  
-  if (!pbxCallId) {
-    return res.status(404).json({ error: 'Brak pbx_call_id — nie można pobrać nagrania' });
-  }
-  
-  // Pobierz ŚWIEŻY link z Zadarma (stary mógł wygasnąć)
-  const freshUrl = await fetchRecordingFromZadarma(pbxCallId);
-  if (!freshUrl) {
-    return res.status(404).json({ error: 'Nagranie niedostępne w Zadarma — mogło zostać usunięte lub nie było nagrane' });
-  }
-  
-  // Zaktualizuj zapisany URL
-  storeCall({ callId, recordingUrl: freshUrl });
-  
-  // Przekieruj do świeżego linka (przeglądarka pobierze plik)
-  res.redirect(freshUrl);
 });
 
 // ─── Automatyczne przeniesienie stage przy nieodebranym połączeniu ─────────────
@@ -948,12 +828,8 @@ app.post('/webhook/zadarma', async (req, res) => {
 
   console.log(`[Zadarma] ${event} | callId=${callId} | from=${caller} | to=${called}`);
 
-  // Numer wewnętrzny docelowy (Zadarma wysyła jako 'internal')
-  const targetExt = data.internal || data.destination || null;
-
   if (event === 'NOTIFY_START' || event === 'INCOMING') {
     // Nowe połączenie przychodzące
-    const nowTs = new Date().toISOString();
     const callObj = {
       callId,
       pbxCallId,
@@ -961,46 +837,22 @@ app.post('/webhook/zadarma', async (req, res) => {
       status: 'ringing',
       from: caller,
       to: called,
-      targetExt,
-      outsideWorkingHours: isOutsideWorkingHours(nowTs),
-      timestamp: nowTs,
+      timestamp: new Date().toISOString(),
       recordingUrl: null,
       tag: null
     };
-    // Przypisz userId z mapy aktywnych użytkowników
-    const inboundExt = String(targetExt || called || caller || '');
-    const isSharedExt = SHARED_EXTENSIONS.has(inboundExt);
-
-    if (isSharedExt && callObj.outsideWorkingHours) {
-      // Recepcja poza godzinami — nikt nie jest przy stanowisku, nie przypisuj do osoby
-      callObj.userId    = null;
-      callObj.agentName = null;
-      callObj.unattended = true; // flaga: połączenie bez obsługi
-      console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} poza godzinami — brak przypisania`);
-    } else {
-      const assignedUserId = activeExtMap.get(inboundExt) || activeExtMap.get(caller) || null;
-      if (assignedUserId) {
-        callObj.userId    = assignedUserId;
-        callObj.agentName = USERS[assignedUserId]?.name || null;
-        console.log(`[ActiveExt] Inbound ${callId}: ext ${inboundExt} → ${assignedUserId}`);
-      }
-    }
     storeCall(callObj);
     broadcast({ type: 'CALL_RINGING', ...callObj });
   }
 
   else if (event === 'NOTIFY_OUT_START' || event === 'OUTGOING') {
     // Połączenie wychodzące — jeśli już istnieje z click-to-call, tylko aktualizuj pbxCallId
-    // Przypisz userId z mapy aktywnych użytkowników (wychodzące)
-    const outboundExt = caller || called;
-    const outUserId = activeExtMap.get(outboundExt) || null;
-    if (outUserId) console.log(`[ActiveExt] Outbound ${callId}: ext ${outboundExt} → ${outUserId}`);
     const existing = callsStore.find(c => c.callId === callId);
     if (existing) {
-      storeCall({ callId, pbxCallId, status: 'ringing', userId: outUserId || existing.userId });
+      storeCall({ callId, pbxCallId, status: 'ringing' });
     } else {
       storeCall({
-        callId, pbxCallId, direction: 'outbound', status: 'ringing', userId: outUserId,
+        callId, pbxCallId, direction: 'outbound', status: 'ringing',
         from: caller || called, to: called || caller,
         timestamp: new Date().toISOString(), recordingUrl: null, tag: null
       });
@@ -1010,10 +862,7 @@ app.post('/webhook/zadarma', async (req, res) => {
 
   else if (event === 'NOTIFY_ANSWER' || event === 'ANSWERED') {
     storeCall({ callId, status: 'active', answeredAt: new Date().toISOString(), tag: 'connected' });
-    const answeredCall = callsStore.find(c => c.callId === callId);
-    broadcast({ type: 'CALL_ANSWERED', callId, tag: 'connected',
-      agentName: answeredCall?.agentName || (answeredCall?.userId ? USERS[answeredCall.userId]?.name : null) || null
-    });
+    broadcast({ type: 'CALL_ANSWERED', callId, tag: 'connected' });
   }
 
   else if (event === 'NOTIFY_END' || event === 'ENDED' || event === 'MISSED') {
@@ -1027,9 +876,7 @@ app.post('/webhook/zadarma', async (req, res) => {
     if (isMissed && direction === 'outbound') tag = 'ineffective';
 
     storeCall({ callId, status: 'ended', duration, tag, endedAt: new Date().toISOString() });
-    broadcast({ type: 'CALL_ENDED', callId, duration, tag, direction,
-      agentName: call?.agentName || (call?.userId ? USERS[call.userId]?.name : null) || null
-    });
+    broadcast({ type: 'CALL_ENDED', callId, duration, tag, direction });
 
     if (!isMissed && pbxCallId) {
       scheduleRecordingFetch(callId, pbxCallId, call?.from || caller);
@@ -1330,7 +1177,7 @@ function mapTaskRow(row) {
     dueDate: row.due_date,
     assignedTo: row.assigned_to,
     assignedToName: row.assigned_to_name,
-    status: row.status || 'pending',
+    status: row.status || 'open',
     pool: row.pool || false,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -1356,7 +1203,7 @@ app.post('/api/tasks', async (req, res) => {
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
         assigned_to: isPool ? null : (assignedTo || null),
         assigned_to_name: assignedUser?.name || null,
-        status: 'pending',
+        status: 'open',
         pool: isPool,
         created_by: userId
       }).select().single();
@@ -1366,7 +1213,7 @@ app.post('/api/tasks', async (req, res) => {
       // Fallback RAM
       const taskId = `task_${taskIdCounter++}`;
       task = { id: taskId, title, description, contactId, contactName, dueDate,
-        assignedTo: isPool ? null : (assignedTo || null), status: 'pending',
+        assignedTo: isPool ? null : (assignedTo || null), status: 'open',
         pool: isPool, createdBy: userId, createdAt: new Date().toISOString() };
       tasksPool.set(taskId, task);
     }
@@ -1474,88 +1321,6 @@ app.delete('/api/tasks/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── POPUP DANYCH KONTAKTU (szybkie dane dla popupu połączenia) ─────────────────
-// Zwraca: etap GHL, status operacyjny, W0, ostatnią notatkę — bez pełnych activities
-app.get('/api/contact/:id/popup', async (req, res) => {
-  const contactId = req.params.id;
-  try {
-    // 1. Pobierz dane z GHL (kontakt + szansa sprzedaży)
-    const [contactResp, oppsResp] = await Promise.allSettled([
-      axios.get(`https://services.leadconnectorhq.com/contacts/${contactId}`, { headers: ghlHeaders, timeout: 8000 }),
-      axios.get(`https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}&limit=1`, { headers: ghlHeaders, timeout: 8000 })
-    ]);
-    const contact = contactResp.status === 'fulfilled' ? (contactResp.value.data?.contact || {}) : {};
-    const opps    = oppsResp.status === 'fulfilled'    ? (oppsResp.value.data?.opportunities || []) : [];
-    const latestOpp = opps[0] || null;
-    // 2. Mapuj custom fields
-    const cf = contact.customFields || [];
-    const getField = (id) => cf.find(f => f.id === id);
-    const mainProblem = getField('k1OizGtL0V6IaWjGlVBK');
-    const w0DateField = getField('IUjxWY10y6kuITsSjfSw');
-    // 3. Pobierz dane z Supabase (contacts + last event/note)
-    let contactRow = null, lastNote = null, w0FromDB = null;
-    if (supabase) {
-      try {
-        const { data: cRow } = await supabase.from('contacts')
-          .select('w0_scheduled, w0_date, w0_doctor, contact_status, first_call_at, last_note, last_note_at, ghl_stage_name')
-          .eq('ghl_contact_id', contactId)
-          .single();
-        contactRow = cRow;
-      } catch(e) { /* kontakt może nie istnieć w Supabase */ }
-      // Ostatnia notatka z events
-      try {
-        const { data: lastEvent } = await supabase.from('events')
-          .select('description, created_at, event_type, source')
-          .eq('contact_id', contactId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        if (lastEvent) lastNote = { text: lastEvent.description, at: lastEvent.created_at, type: lastEvent.event_type, source: lastEvent.source };
-      } catch(e) { /* brak eventów */ }
-      // W0 z calls (fallback)
-      if (!contactRow?.w0_scheduled) {
-        try {
-          const { data: w0Calls } = await supabase.from('calls')
-            .select('scheduled_w0, w0_date, w0_doctor')
-            .eq('ghl_contact_id', contactId)
-            .eq('scheduled_w0', true)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          if (w0Calls && w0Calls.length > 0) {
-            w0FromDB = { scheduled: true, date: w0Calls[0].w0_date, doctor: w0Calls[0].w0_doctor };
-          }
-        } catch(e) { /* brak W0 */ }
-      }
-    }
-    // 4. Ustal W0 (priorytet: contacts > calls > GHL custom field)
-    const w0Scheduled = contactRow?.w0_scheduled || w0FromDB?.scheduled || !!(w0DateField?.value);
-    const w0Date = contactRow?.w0_date || w0FromDB?.date || (w0DateField?.value ? new Date(Number(w0DateField.value)).toISOString() : null);
-    const w0Doctor = contactRow?.w0_doctor || w0FromDB?.doctor || null;
-    // 5. Ustal etap GHL
-    const stageName = latestOpp ? (GHL_STAGES[latestOpp.pipelineStageId] || latestOpp.pipelineStageId || null) : null;
-    res.json({
-      id: contactId,
-      firstName: contact.firstName || '',
-      lastName: contact.lastName || '',
-      phone: contact.phone || '',
-      zglosza: mainProblem?.value || '',
-      stageName,
-      stageId: latestOpp?.pipelineStageId || null,
-      opportunityId: latestOpp?.id || null,
-      contactStatus: contactRow?.contact_status || null,
-      firstCallAt: contactRow?.first_call_at || null,
-      w0_scheduled: w0Scheduled,
-      w0_date: w0Date,
-      w0_doctor: w0Doctor,
-      lastNote,
-      lead_created_at: contact.dateAdded || null
-    });
-  } catch (err) {
-    console.error('[Popup] Error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── KARTA PACJENTA (Patient Card) ──────────────────────────────────────────────
 app.get('/api/contact/:id/card', async (req, res) => {
   try {
@@ -1578,99 +1343,30 @@ app.get('/api/contact/:id/card', async (req, res) => {
     );
     const opportunities = oppsResp.data?.opportunities || [];
 
-    // Pobierz notatki z GHL (i zsynchronizuj z events)
-    let ghlNotes = [];
-    try {
-      const notesResp = await axios.get(
-        `https://services.leadconnectorhq.com/contacts/${contactId}/notes`,
-        { headers: ghlHeaders, timeout: 8000 }
-      );
-      ghlNotes = notesResp.data?.notes || [];
-      // Synchronizuj notatki GHL do tabeli events (upsert po ghl_note_id w metadata)
-      if (supabase && ghlNotes.length > 0) {
-        for (const note of ghlNotes) {
-          try {
-            // Sprawdź czy notatka już istnieje w events
-            const { data: existing } = await supabase.from('events')
-              .select('id')
-              .eq('contact_id', contactId)
-              .eq('source', 'ghl')
-              .filter('metadata->ghl_note_id', 'eq', note.id)
-              .limit(1);
-            if (!existing || existing.length === 0) {
-              await supabase.from('events').insert({
-                event_type: 'ghl_note',
-                contact_id: contactId,
-                contact_name: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
-                source: 'ghl',
-                description: note.body || note.text || '(notatka bez treści)',
-                metadata: { ghl_note_id: note.id, userId: note.userId },
-                created_at: note.dateAdded || new Date().toISOString()
-              });
-            }
-          } catch(e) { /* ignoruj błędy synchronizacji pojedynczej notatki */ }
-        }
-      }
-    } catch (e) {
-      console.warn('[Patient Card] GHL notes error:', e.message);
-    }
     // Pobierz historię połączeń z Supabase
     let callHistory = [];
-    if (supabase) {
-      try {
-        const { data: calls, error } = await supabase
-          .from('calls')
-          .select('*')
-          .eq('ghl_contact_id', contactId)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        
-        if (!error && calls) {
-          callHistory = calls;
-        }
-      } catch (e) {
-        console.warn('[Patient Card] Supabase call history error:', e.message);
+    try {
+      const { data: calls, error } = await supabase
+        .from('calls')
+        .select('*')
+        .eq('ghl_contact_id', contactId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (!error && calls) {
+        callHistory = calls;
       }
+    } catch (e) {
+      console.warn('[Patient Card] Supabase call history error:', e.message);
     }
 
-    // Pobierz historię zadań z Supabase
-    let taskHistory = [];
-    if (supabase) {
-      try {
-        const { data: tasks } = await supabase.from('tasks')
-          .select('*')
-          .eq('contact_id', contactId)
-          .order('created_at', { ascending: false })
-          .limit(30);
-        if (tasks) taskHistory = tasks;
-      } catch(e) { console.warn('[Patient Card] Tasks error:', e.message); }
-    }
-    // Pobierz ujednolicony Timeline z tabeli events (app + ghl)
-    let unifiedTimeline = [];
-    if (supabase) {
-      try {
-        const { data: eventsData } = await supabase.from('events')
-          .select('*')
-          .eq('contact_id', contactId)
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (eventsData) unifiedTimeline = eventsData;
-      } catch(e) { console.warn('[Patient Card] Events fetch error:', e.message); }
-    }
-
-    // Mapowanie GHL custom fields po ID lub key
+    // Mapowanie GHL custom fields po ID
     const cf = contact.customFields || [];
     const getField = (id) => cf.find(f => f.id === id);
-    const getFieldByKey = (key) => cf.find(f => (f.fieldKey || '').toLowerCase().includes(key.toLowerCase()));
-    const mainProblem   = getField('k1OizGtL0V6IaWjGlVBK') || getFieldByKey('z_czym_si_zgasza');
-    const marketing     = getField('R0X7n8GG7545mnrGnREg') || getFieldByKey('zgoda_marketingowa');
+    const mainProblem   = getField('k1OizGtL0V6IaWjGlVBK');
+    const marketing     = getField('R0X7n8GG7545mnrGnREg');
     const w0DateField   = getField('IUjxWY10y6kuITsSjfSw');
     const w0NotesField  = getField('v04mALNDZzMgyH8YzK46');
-    // Nowe pola
-    const sourceContact  = getFieldByKey('rdo_kontaktu');
-    const prefChannel    = getFieldByKey('preferowany_kana');
-    const potProgram     = getFieldByKey('potencjalny_program');
-    const firstCallNote  = getFieldByKey('notatka_z_pierwszej_rozmowy');
 
     // Sprawdź W0 z raportów w Supabase
     let w0FromReports = { scheduled: false, date: null, doctor: null };
@@ -1689,19 +1385,6 @@ app.get('/api/contact/:id/card', async (req, res) => {
       } catch(e) {}
     }
 
-    // Pobierz W0 z contacts table (globalne — priorytet nad calls)
-    let contactW0 = { scheduled: w0FromReports.scheduled, date: w0FromReports.date, doctor: w0FromReports.doctor };
-    if (supabase) {
-      try {
-        const { data: cRow } = await supabase.from('contacts')
-          .select('w0_scheduled, w0_date, w0_doctor, contact_status, first_call_at')
-          .eq('ghl_contact_id', contactId)
-          .single();
-        if (cRow) {
-          if (cRow.w0_scheduled) contactW0 = { scheduled: true, date: cRow.w0_date, doctor: cRow.w0_doctor };
-        }
-      } catch(e) { /* kontakt może nie istnieć w Supabase */ }
-    }
     res.json({
       contact: {
         id: contact.id,
@@ -1709,56 +1392,19 @@ app.get('/api/contact/:id/card', async (req, res) => {
         lastName: contact.lastName,
         email: contact.email,
         phone: contact.phone,
-        city: contact.city || '',
-        gender: contact.gender || '',
-        dateOfBirth: contact.dateOfBirth || '',
         source: contact.source,
         tags: contact.tags || [],
         createdAt: contact.createdAt,
         // Zmapowane custom fields
         mainProblem: mainProblem?.value || '',
-        sourceContact: sourceContact?.value || '',
-        marketingConsent: marketing?.value || '',
-        preferredChannel: prefChannel?.value || '',
-        potentialProgram: potProgram?.value || '',
-        firstCallNote: firstCallNote?.value || '',
-        w0_date: contactW0.date || (w0DateField?.value ? new Date(Number(w0DateField.value)).toISOString() : null),
+        marketingConsent: marketing?.value === 'tak' || marketing?.value === true,
+        w0_date: w0DateField?.value ? new Date(Number(w0DateField.value)).toISOString() : (w0FromReports.date || null),
         w0_notes: w0NotesField?.value || '',
-        w0_scheduled: !!(contactW0.scheduled || w0DateField?.value),
-        w0_doctor: contactW0.doctor || null,
-        // Surowe custom fields (do debugowania / mapowania nowych pól)
+        w0_scheduled: !!(w0DateField?.value || w0FromReports.scheduled),
+        w0_doctor: w0FromReports.doctor || null,
+        // Surowe custom fields (dla debugowania)
         customFields: cf
       },
-      // Pipeline info
-      pipeline: opportunities.length > 0 ? {
-        id: opportunities[0].pipelineId,
-        stageId: opportunities[0].pipelineStageId,
-        stageName: GHL_STAGES[opportunities[0].pipelineStageId] || 'Nieznany',
-        assignedTo: opportunities[0].assignedTo || null,
-        status: opportunities[0].status
-      } : null,
-      // Historia zadań
-      taskHistory: taskHistory.map(t => ({
-        id: t.id,
-        title: t.title,
-        body: t.body,
-        status: t.status,
-        dueDate: t.due_date,
-        assignedTo: t.assigned_to,
-        completedAt: t.completed_at,
-        createdAt: t.created_at
-      })),
-      // Ujednolicony Timeline (app + ghl) — z tabeli events
-      unifiedTimeline: unifiedTimeline.map(e => ({
-        id: e.id,
-        type: e.event_type,
-        source: e.source || 'app',
-        description: e.description,
-        createdAt: e.created_at,
-        userId: e.user_id,
-        metadata: e.metadata
-      })),
-      // GHL Activities (legacy — zachowane dla kompatybilności)
       timeline: activities.map(a => ({
         id: a.id,
         type: a.type,
@@ -1799,7 +1445,6 @@ app.get('/api/contact/:id/card', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 1;
-    const { userId, role } = req.query;
     const [contactsResp, oppsResp] = await Promise.allSettled([
       axios.get(`https://services.leadconnectorhq.com/contacts/?locationId=${GHL_LOCATION_ID}&limit=100`, { headers: ghlHeaders, timeout: 10000 }),
       axios.get(`https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&pipeline_id=${GHL_PIPELINE_ID}&limit=100`, { headers: ghlHeaders, timeout: 10000 })
@@ -1808,24 +1453,7 @@ app.get('/api/stats', async (req, res) => {
     const contacts = contactsResp.status === 'fulfilled' ? (contactsResp.value.data.contacts || []) : [];
     const opps     = oppsResp.status === 'fulfilled'     ? (oppsResp.value.data.opportunities || []) : [];
 
-    let periodCalls = getRecentCalls(days);
-
-    // Filtrowanie połączeń per rola/użytkownik
-    if (role !== 'admin' && userId) {
-      const user = USERS[userId];
-      if (user && user.ext) {
-        periodCalls = periodCalls.filter(c => {
-          if (c.userId === userId) return true;
-          const from = String(c.from || '');
-          const to = String(c.to || '');
-          const extNum = user.ext;
-          if (from === extNum || to === extNum) return true;
-          if (from.endsWith(extNum) || to.endsWith(extNum)) return true;
-          return false;
-        });
-      }
-    }
-
+    const periodCalls = getRecentCalls(days);
     const totalCalls  = periodCalls.length;
     const answered    = periodCalls.filter(c => c.status === 'ended' && c.tag === 'connected').length;
     const missed      = periodCalls.filter(c => c.tag === 'missed').length;
@@ -1847,9 +1475,8 @@ app.get('/api/stats', async (req, res) => {
       leadSources[src] = (leadSources[src] || 0) + 1;
     });
 
-    // Statystyki rozszerzone (Reception OS)
+    // Statystyki follow-up (z Supabase)
     let followUpStats = { total: 0, done: 0, overdue: 0, conversionToW0: 0 };
-    let metrics = { leadToFirstCallAvg: 0, firstCallToW0Avg: 0, w0WaitAvg: 0 };
     let avgResponseTimeMins = null;
     let newPatientsCount = 0;
     let firstCallsCount = 0;
@@ -1860,67 +1487,50 @@ app.get('/api/stats', async (req, res) => {
         const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
         const now = new Date().toISOString();
 
-        // 1. Follow-up tasks & conversion
+        // Follow-up tasks
         const { data: fuTasks } = await supabase.from('tasks')
-          .select('status, completed_at, due_date, contact_id')
+          .select('status, completed_at, due_date')
           .eq('task_type', 'follow_up_call')
           .gte('created_at', since);
-        
         if (fuTasks) {
           followUpStats.total = fuTasks.length;
-          followUpStats.done = fuTasks.filter(t => t.status === 'done').length;
-          followUpStats.overdue = fuTasks.filter(t => t.status !== 'done' && new Date(t.due_date) < new Date()).length;
-          
-          // Konwersja follow-up -> W0
-          const fuContactIds = fuTasks.map(t => t.contact_id);
-          if (fuContactIds.length > 0) {
-            const { data: converted } = await supabase.from('events')
-              .select('contact_id')
-              .eq('event_type', 'w0_scheduled')
-              .in('contact_id', fuContactIds);
-            const uniqueConverted = new Set(converted?.map(e => e.contact_id)).size;
-            followUpStats.conversionToW0 = fuTasks.length > 0 ? Math.round((uniqueConverted / fuTasks.length) * 100) : 0;
-          }
+          followUpStats.done = fuTasks.filter(t => t.status === 'completed').length;
+          followUpStats.overdue = fuTasks.filter(t => t.status !== 'completed' && new Date(t.due_date) < new Date()).length;
         }
 
-        // 2. Metryki czasu (Lead -> First Call -> W0)
+        // Czas reakcji (avg)
         const { data: contactsData } = await supabase.from('contacts')
-          .select('response_time_minutes, lead_to_w0_days, w0_wait_days, is_new_patient')
-          .gte('updated_at', since);
-
-        if (contactsData) {
-          const respTimes = contactsData.map(c => c.response_time_minutes).filter(t => t != null);
-          metrics.leadToFirstCallAvg = respTimes.length > 0 ? Math.round(respTimes.reduce((a,b) => a+b, 0) / respTimes.length) : 0;
-          avgResponseTimeMins = metrics.leadToFirstCallAvg;
-          
-          const l2w0Times = contactsData.map(c => c.lead_to_w0_days).filter(t => t != null);
-          metrics.firstCallToW0Avg = l2w0Times.length > 0 ? Math.round(l2w0Times.reduce((a,b) => a+b, 0) / l2w0Times.length) : 0;
-          
-          const waitTimes = contactsData.map(c => c.w0_wait_days).filter(t => t != null);
-          metrics.w0WaitAvg = waitTimes.length > 0 ? Math.round(waitTimes.reduce((a,b) => a+b, 0) / waitTimes.length) : 0;
-          
+          .select('response_time_minutes, is_new_patient')
+          .not('response_time_minutes', 'is', null)
+          .gte('first_call_at', since);
+        if (contactsData && contactsData.length > 0) {
+          const times = contactsData.map(c => c.response_time_minutes).filter(t => t > 0);
+          avgResponseTimeMins = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
           newPatientsCount = contactsData.filter(c => c.is_new_patient).length;
         }
 
-        // 3. Powody odwołań (z events)
-        const { data: cancellations } = await supabase.from('events')
-          .select('metadata')
-          .eq('event_type', 'visit_cancelled')
+        // Pierwsze rozmowy
+        const { data: firstCalls } = await supabase.from('calls')
+          .select('id')
+          .eq('call_type', 'first_call')
           .gte('created_at', since);
-        
+        firstCallsCount = firstCalls?.length || 0;
+
+        // Powody odwołań
+        const { data: cancellations } = await supabase.from('calls')
+          .select('cancellation_reason')
+          .not('cancellation_reason', 'is', null)
+          .gte('created_at', since);
         if (cancellations) {
           cancellations.forEach(c => {
-            const reason = c.metadata?.cancellationReason || 'Nieznany';
+            const reason = c.cancellation_reason || 'Nieznany';
             cancellationStats[reason] = (cancellationStats[reason] || 0) + 1;
           });
         }
       } catch(e) { console.warn('[Stats] Supabase error:', e.message); }
     }
 
-    // Oblicz firstCallsCount z połączeń (połączenia wychodzące zakończone sukcesem)
-    firstCallsCount = periodCalls.filter(c => c.direction === 'outbound' && c.tag === 'connected').length;
-
-        res.json({
+    res.json({
       totalContacts: contacts.length,
       totalOpportunities: opps.length,
       stats: {
@@ -1931,13 +1541,12 @@ app.get('/api/stats', async (req, res) => {
         answeredPercent: answeredPct,
         callbackRate: missed > 0 ? Math.round((callbackDone / missed) * 100) : 100,
         uniquePatients: contacts.length,
-        newLeads: opps.filter(o => o.status === 'pending').length,
+        newLeads: opps.filter(o => o.status === 'open').length,
         // Reception OS metrics
         newPatients: newPatientsCount,
         firstCalls: firstCallsCount,
         avgResponseTimeMins,
-        followUp: followUpStats,
-        metrics  // ← metryki czasu (leadToFirstCallAvg, firstCallToW0Avg, w0WaitAvg)
+        followUp: followUpStats
       },
       callsByStatus: {
         connected: periodCalls.filter(c => c.tag === 'connected').length,
@@ -1947,47 +1556,7 @@ app.get('/api/stats', async (req, res) => {
       callsByHour,
       leadSources,
       cancellationStats,
-      recentCalls: periodCalls.slice(0, 100),
-      // Podział per stanowisko i osoba (tylko dla admina)
-      agentBreakdown: (() => {
-        const allUsersArr = Object.values(USERS);
-        // Grupuj połączenia po ext (stanowisko)
-        const stations = {
-          reception: { label: 'Recepcja', ext: '103', calls: [], agents: {} },
-          agata_o:   { label: 'Agata (Opiekun)', ext: '101', calls: [], agents: {} },
-          aneta_o:   { label: 'Aneta (Opiekun)', ext: '102', calls: [], agents: {} },
-        };
-        const allCallsAll = getRecentCalls(days); // wszystkie, bez filtrowania
-        allCallsAll.forEach(c => {
-          const from = String(c.from || '');
-          const to   = String(c.to || '');
-          // Przypisz do stanowiska po ext
-          for (const [key, station] of Object.entries(stations)) {
-            const ext = station.ext;
-            if (from === ext || to === ext || from.endsWith(ext) || to.endsWith(ext)) {
-              station.calls.push(c);
-              // Przypisz do agenta po userId (jeśli jest)
-              if (c.userId) {
-                if (!station.agents[c.userId]) station.agents[c.userId] = { name: USERS[c.userId]?.name || c.userId, calls: 0, connected: 0, missed: 0 };
-                station.agents[c.userId].calls++;
-                if (c.tag === 'connected') station.agents[c.userId].connected++;
-                if (c.tag === 'missed') station.agents[c.userId].missed++;
-              }
-              break;
-            }
-          }
-        });
-        return Object.entries(stations).map(([key, s]) => ({
-          key,
-          label: s.label,
-          ext: s.ext,
-          total: s.calls.length,
-          connected: s.calls.filter(c => c.tag === 'connected').length,
-          missed: s.calls.filter(c => c.tag === 'missed').length,
-          ineffective: s.calls.filter(c => c.tag === 'ineffective').length,
-          agents: Object.values(s.agents)
-        }));
-      })()
+      recentCalls: periodCalls.slice(0, 100)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2007,9 +1576,7 @@ app.get('/api/server-ip', async (req, res) => {
 // ─── SYSTEM UŻYTKOWNIKÓW — definicja przeniesiona na górę pliku ───────────────
 
 app.get('/api/users', (req, res) => {
-  const list = Object.values(USERS).map(u => ({
-    id: u.id, name: u.name, role: u.role, ext: u.ext || null, ghlUserId: u.ghlUserId
-  }));
+  const list = Object.values(USERS).map(u => ({ id: u.id, name: u.name, role: u.role, ghlUserId: u.ghlUserId }));
   res.json({ users: list });
 });
 
@@ -2028,12 +1595,6 @@ app.get('/api/user/:id', async (req, res) => {
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
     } catch(e) { console.error('[Activity] Error:', e.message); }
-  }
-
-  // Zaktualizuj mapę aktywnych użytkowników (ext → userId)
-  if (user.ext) {
-    activeExtMap.set(user.ext, user.id);
-    console.log(`[ActiveExt] Login: ext ${user.ext} → ${user.id}`);
   }
   
   res.json(user);
@@ -2203,33 +1764,9 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
           updates.w0_booked_at = new Date().toISOString();
         }
         if (firstCallAt) updates.first_call_at = new Date(firstCallAt).toISOString();
-        // Ustaw scheduled_w0 = true na calls gdy w0Date jest ustawione
-        if (w0Date) updates.scheduled_w0 = true;
 
         const { error } = await supabase.from('calls').update(updates).eq('call_id', callId);
         if (error) throw error;
-        // Globalne W0 — aktualizuj contacts gdy w0Date jest ustawione
-        if (w0Date && contactId) {
-          try {
-            const w0Doctor = req.body.w0Doctor || null;
-            await supabase.from('contacts').update({
-              w0_scheduled: true,
-              w0_date: new Date(w0Date).toISOString(),
-              w0_doctor: w0Doctor,
-              updated_at: new Date().toISOString()
-            }).eq('ghl_contact_id', contactId);
-            // Event: W0 umówione
-            await supabase.from('events').insert({
-              event_type: 'w0_scheduled',
-              contact_id: contactId,
-              contact_name: contactName,
-              user_id: userId,
-              source: 'app',
-              description: `Umówiono wizytę W0 na ${new Date(w0Date).toLocaleDateString('pl-PL')}${w0Doctor ? ` u dr ${w0Doctor}` : ''}`,
-              metadata: { callId, w0Date, w0Doctor }
-            });
-          } catch(e) { console.warn('[ReceptionOS] W0 global update error:', e.message); }
-        }
 
         // Logika Eventów: Odwołanie wizyty
         if (callEffect === 'visit_cancelled' || outcome === 'odwolanie_wizyty') {
@@ -2241,33 +1778,6 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
             description: `Odwołanie wizyty. Powód: ${cancellationReason || 'nie podano'}`,
             metadata: { callId, cancellationReason }
           });
-          
-          // Jeśli BRAK nowego terminu -> Automatyczny task follow-up (Reception OS)
-          if (!w0Date) {
-            const followUpDate = new Date();
-            followUpDate.setDate(followUpDate.getDate() + 3); // Domyślnie 3 dni
-            await supabase.from('tasks').insert({
-              title: `Oddzwoń po odwołaniu: ${contactName || 'Pacjent'}`,
-              description: `Pacjent odwołał wizytę. Powód: ${cancellationReason || 'nie podano'}. Brak nowego terminu.`,
-              contact_id: contactId,
-              contact_name: contactName,
-              phone: req.body.phone,
-              due_date: followUpDate.toISOString(),
-              task_type: 'follow_up_call',
-              status: 'pending',
-              pool: true,
-              created_by: 'system'
-            });
-            
-            await supabase.from('events').insert({
-              event_type: 'follow_up_created',
-              contact_id: contactId,
-              contact_name: contactName,
-              user_id: userId,
-              source: 'app',
-              description: `Utworzono auto-task po odwołaniu wizyty`
-            });
-          }
         }
 
         // Logika Automatycznych Zadań: Follow-up
@@ -2295,7 +1805,6 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
             contact_id: contactId,
             contact_name: contactName,
             user_id: userId,
-            source: 'app',
             description: `Utworzono automatyczny follow-up na za ${delay}`
           });
         }
@@ -2336,7 +1845,6 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
                 contact_id: contactId,
                 contact_name: contactName,
                 user_id: userId,
-                source: 'app',
                 description: `Pierwszy kontakt. Czas reakcji: ${responseTimeMins} min`,
                 metadata: { callId, responseTimeMins }
               });
@@ -2537,80 +2045,18 @@ app.get('/api/reports/stats', async (req, res) => {
 // Pobierz historię połączeń z Supabase (z raportami i nagraniami)
 app.get('/api/calls/history', async (req, res) => {
   const days = parseInt(req.query.days) || 30;
-  const { userId, role, dateFrom, dateTo, search, station, agentId } = req.query;
-
-  // Zakres dat
-  let since;
-  if (dateFrom) {
-    since = new Date(dateFrom).toISOString();
-  } else {
-    since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  }
-  const until = dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : null;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   if (supabase) {
     try {
-      let query = supabase.from('calls')
+      const { data, error } = await supabase.from('calls')
         .select('*')
         .gte('created_at', since)
         .order('created_at', { ascending: false })
-        .limit(500);
-
-      if (until) query = query.lte('created_at', until);
-      if (search && search.trim()) query = query.ilike('patient_name', `%${search.trim()}%`);
-
-      const { data, error } = await query;
-      // Filtrowanie po ext po stronie serwera
-      let filteredRows = data || [];
-
-      // Zbierz user_id dla każdego stanowiska (recepcja/opiekunowie)
-      const receptionIds = Object.values(USERS).filter(u => u.role === 'reception').map(u => u.id);
-      const agataOIds    = ['agata_o'];
-      const anetaOIds    = ['aneta_o'];
-
-      // Recepcja widzi WSZYSTKIE połączenia — opiekunowie tylko swoje
-      if (role !== 'admin' && userId) {
-        const userObj = USERS[userId];
-        if (userObj?.role === 'opiekun') {
-          const ext = userObj.ext;
-          filteredRows = filteredRows.filter(row => {
-            if (row.user_id === userId) return true;
-            if (!row.user_id) {
-              const from = String(row.caller_phone || '');
-              const to   = String(row.called_phone || '');
-              return from === ext || to === ext;
-            }
-            return false;
-          });
-        }
-      }
-
-      // Admin: filtr po stanowisku (po user_id, nie po numerze telefonu)
-      if (role === 'admin' && station && station !== 'all') {
-        let stationIds;
-        if (station === 'reception') stationIds = receptionIds;
-        else if (station === 'agata_o') stationIds = agataOIds;
-        else if (station === 'aneta_o') stationIds = anetaOIds;
-        if (stationIds) {
-          filteredRows = filteredRows.filter(row => {
-            if (row.user_id && stationIds.includes(row.user_id)) return true;
-            // Stare rekordy bez user_id — dla recepcji sprawdź ext 103
-            if (!row.user_id && station === 'reception') {
-              const from = String(row.caller_phone || '');
-              const to   = String(row.called_phone || '');
-              return from === '103' || to === '103' || from.endsWith('103') || to.endsWith('103');
-            }
-            return false;
-          });
-        }
-      }
-      // Admin: filtr po konkretnej osobie
-      if (role === 'admin' && agentId && agentId !== 'all') {
-        filteredRows = filteredRows.filter(row => row.user_id === agentId);
-      }
+        .limit(300); // Pobierz nieco więcej, aby po odfiltrowaniu '0' zostało wystarczająco
       if (error) throw new Error(error.message);
       
-      const filteredData = filteredRows.filter(row => {
+      const filteredData = (data || []).filter(row => {
         // Usuń techniczne wpisy "0" lub puste numery, o ile nie mają przypisanego pacjenta
         const isTechnicalZero = (row.caller_phone === '0' || !row.caller_phone) && 
                                 (row.called_phone === '0' || !row.called_phone) && 
@@ -2625,28 +2071,18 @@ app.get('/api/calls/history', async (req, res) => {
         if (row.pbx_call_id && seenPbxIds.has(row.pbx_call_id)) continue;
         if (row.pbx_call_id) seenPbxIds.add(row.pbx_call_id);
         
-        uniqueCalls.push({\n          callId: row.call_id,\n          pbxCallId: row.pbx_call_id,\n          from: row.caller_phone,\n          to: row.called_phone,\n          direction: row.direction,\n          status: row.status,\n          duration: row.duration_seconds,\n          recordingUrl: row.recording_url,\n          contactName: row.patient_name,\n          contactId: row.ghl_contact_id,
-          userId: (() => {
-            // Ext współdzielony + poza godzinami → brak przypisania
-            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
-            const ext = String(row.called_phone || row.caller_phone || '');
-            const isShared = SHARED_EXTENSIONS.has(ext) || ext.endsWith('103');
-            if (isShared && isOutside) return null;
-            return row.user_id || null;
-          })(),
-          agentName: (() => {
-            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
-            const ext = String(row.called_phone || row.caller_phone || '');
-            const isShared = SHARED_EXTENSIONS.has(ext) || ext.endsWith('103');
-            if (isShared && isOutside) return null; // frontend pokaże "Niezalogowany"
-            return row.user_id && USERS[row.user_id] ? USERS[row.user_id].name : null;
-          })(),
-          outsideWorkingHours: row.created_at ? isOutsideWorkingHours(row.created_at) : false,
-          unattended: (() => {
-            const isOutside = row.created_at ? isOutsideWorkingHours(row.created_at) : false;
-            const ext = String(row.called_phone || row.caller_phone || '');
-            return isOutside && (SHARED_EXTENSIONS.has(ext) || ext.endsWith('103'));
-          })(),
+        uniqueCalls.push({
+          callId: row.call_id,
+          pbxCallId: row.pbx_call_id,
+          from: row.caller_phone,
+          to: row.called_phone,
+          direction: row.direction,
+          status: row.status,
+          duration: row.duration_seconds,
+          recordingUrl: row.recording_url,
+          contactName: row.patient_name,
+          contactId: row.ghl_contact_id,
+          userId: row.user_id,
           tag: row.contact_type || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
           contactType: row.contact_type,
           callEffect: row.call_effect,
@@ -2796,25 +2232,6 @@ app.post('/api/users/:id/heartbeat', async (req, res) => {
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
     } catch(e) { /* ignoruj */ }
-  }
-  // Odśwież mapę aktywnych użytkowników
-  if (user.ext) {
-    activeExtMap.set(user.ext, user.id);
-  }
-  res.json({ success: true });
-});
-
-// Wylogowanie użytkownika — czyści wpis w activeExtMap dla ext współdzielonych
-app.post('/api/users/:id/logout', (req, res) => {
-  const user = USERS[req.params.id];
-  if (!user) return res.status(404).json({ error: 'Nie znaleziono' });
-  // Usuń z mapy tylko jeśli to ext współdzielony (dedykowane pozostają aktywne)
-  if (user.ext && SHARED_EXTENSIONS.has(user.ext)) {
-    const currentHolder = activeExtMap.get(user.ext);
-    if (currentHolder === user.id) {
-      activeExtMap.delete(user.ext);
-      console.log(`[ActiveExt] Logout: ext ${user.ext} zwolniony przez ${user.id}`);
-    }
   }
   res.json({ success: true });
 });
