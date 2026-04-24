@@ -83,6 +83,35 @@ const STAGE_ATTEMPT_2     = 'de0a619e-ee22-41c3-9a90-eccfcb1a8fb8';
 const STAGE_AFTER_CALL    = '19126f1b-5529-48fc-be95-d6b64e264e59';
 const STAGE_BOOKED_W0     = '73f6704f-1d6a-49dc-8591-4b129ba1b692';
 
+// ─── GODZINY PRACY ───────────────────────────────────────────────────────────
+// pon-pt 8:50-17:00, środa 10:50-20:00
+function isOutsideWorkingHours(timestamp) {
+  const d = new Date(timestamp);
+  const day = d.getDay(); // 0=niedz, 1=pon...6=sob
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const time = h * 60 + m; // minuty od północy
+
+  if (day === 0 || day === 6) return true; // weekend
+  if (day === 3) return time < 650 || time >= 1200; // środa 10:50-20:00
+  return time < 530 || time >= 1020; // pon-pt (bez śr) 8:50-17:00
+}
+
+// Wzbogać obiekt połączenia o agentName i outsideWorkingHours
+function enrichCall(c) {
+  // Agent name
+  if (c.userId && USERS[c.userId]) {
+    c.agentName = USERS[c.userId].name;
+  } else if (!c.userId) {
+    c.agentName = null; // nieprzypisane
+  }
+  // Godziny pracy
+  if (c.timestamp) {
+    c.outsideWorkingHours = isOutsideWorkingHours(c.timestamp);
+  }
+  return c;
+}
+
 // ─── In-memory store połączeń (I4: /api/calls) ───────────────────────────────
 // Przechowuje połączenia z ostatnich 7 dni (max 500 rekordów)
 const callsStore = [];
@@ -730,27 +759,22 @@ app.get('/api/calls', (req, res) => {
     calls = getRecentCalls(days);
   }
   
-  // Filtrowanie per rola/użytkownik
+  // Recepcja widzi WSZYSTKIE połączenia (nie filtrujemy po ext)
+  // Opiekunowie widzą tylko swoje
   if (role !== 'admin' && userId) {
     const user = USERS[userId];
-    if (user && user.ext) {
-      // Recepcja i opiekunowie widzą tylko połączenia ze swojego numeru wewnętrznego
-      // Połączenie jest "ich" jeśli: caller_id zawiera ext, lub user_id === userId
+    if (user && user.role === 'opiekun') {
       calls = calls.filter(c => {
-        // Sprawdź user_id (zapisany przy raporcie)
         if (c.userId === userId) return true;
-        // Sprawdź numer wewnętrzny w numerach telefonów
         const from = String(c.from || '');
         const to = String(c.to || '');
-        const extNum = user.ext;
-        // Zadarma: numer wewnętrzny pojawia się jako "100", "101", "102", "103"
-        // lub jako część numeru np. "103" w polu from/to przy połączeniach wewnętrznych
-        if (from === extNum || to === extNum) return true;
-        if (from.endsWith(extNum) || to.endsWith(extNum)) return true;
-        return false;
+        return from === user.ext || to === user.ext;
       });
     }
   }
+  
+  // Wzbogać o agentName i outsideWorkingHours
+  calls = calls.map(enrichCall);
   
   res.json({ calls });
 });
@@ -907,8 +931,12 @@ app.post('/webhook/zadarma', async (req, res) => {
 
   console.log(`[Zadarma] ${event} | callId=${callId} | from=${caller} | to=${called}`);
 
+  // Numer wewnętrzny docelowy (Zadarma wysyła jako 'internal')
+  const targetExt = data.internal || data.destination || null;
+
   if (event === 'NOTIFY_START' || event === 'INCOMING') {
     // Nowe połączenie przychodzące
+    const nowTs = new Date().toISOString();
     const callObj = {
       callId,
       pbxCallId,
@@ -916,7 +944,9 @@ app.post('/webhook/zadarma', async (req, res) => {
       status: 'ringing',
       from: caller,
       to: called,
-      timestamp: new Date().toISOString(),
+      targetExt,
+      outsideWorkingHours: isOutsideWorkingHours(nowTs),
+      timestamp: nowTs,
       recordingUrl: null,
       tag: null
     };
@@ -1550,19 +1580,34 @@ app.get('/api/contact/:id/card', async (req, res) => {
     }
     // Pobierz historię połączeń z Supabase
     let callHistory = [];
-    try {
-      const { data: calls, error } = await supabase
-        .from('calls')
-        .select('*')
-        .eq('ghl_contact_id', contactId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (!error && calls) {
-        callHistory = calls;
+    if (supabase) {
+      try {
+        const { data: calls, error } = await supabase
+          .from('calls')
+          .select('*')
+          .eq('ghl_contact_id', contactId)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        
+        if (!error && calls) {
+          callHistory = calls;
+        }
+      } catch (e) {
+        console.warn('[Patient Card] Supabase call history error:', e.message);
       }
-    } catch (e) {
-      console.warn('[Patient Card] Supabase call history error:', e.message);
+    }
+
+    // Pobierz historię zadań z Supabase
+    let taskHistory = [];
+    if (supabase) {
+      try {
+        const { data: tasks } = await supabase.from('tasks')
+          .select('*')
+          .eq('contact_id', contactId)
+          .order('created_at', { ascending: false })
+          .limit(30);
+        if (tasks) taskHistory = tasks;
+      } catch(e) { console.warn('[Patient Card] Tasks error:', e.message); }
     }
     // Pobierz ujednolicony Timeline z tabeli events (app + ghl)
     let unifiedTimeline = [];
@@ -1577,13 +1622,19 @@ app.get('/api/contact/:id/card', async (req, res) => {
       } catch(e) { console.warn('[Patient Card] Events fetch error:', e.message); }
     }
 
-    // Mapowanie GHL custom fields po ID
+    // Mapowanie GHL custom fields po ID lub key
     const cf = contact.customFields || [];
     const getField = (id) => cf.find(f => f.id === id);
-    const mainProblem   = getField('k1OizGtL0V6IaWjGlVBK');
-    const marketing     = getField('R0X7n8GG7545mnrGnREg');
+    const getFieldByKey = (key) => cf.find(f => (f.fieldKey || '').toLowerCase().includes(key.toLowerCase()));
+    const mainProblem   = getField('k1OizGtL0V6IaWjGlVBK') || getFieldByKey('z_czym_si_zgasza');
+    const marketing     = getField('R0X7n8GG7545mnrGnREg') || getFieldByKey('zgoda_marketingowa');
     const w0DateField   = getField('IUjxWY10y6kuITsSjfSw');
     const w0NotesField  = getField('v04mALNDZzMgyH8YzK46');
+    // Nowe pola
+    const sourceContact  = getFieldByKey('rdo_kontaktu');
+    const prefChannel    = getFieldByKey('preferowany_kana');
+    const potProgram     = getFieldByKey('potencjalny_program');
+    const firstCallNote  = getFieldByKey('notatka_z_pierwszej_rozmowy');
 
     // Sprawdź W0 z raportów w Supabase
     let w0FromReports = { scheduled: false, date: null, doctor: null };
@@ -1622,19 +1673,45 @@ app.get('/api/contact/:id/card', async (req, res) => {
         lastName: contact.lastName,
         email: contact.email,
         phone: contact.phone,
+        city: contact.city || '',
+        gender: contact.gender || '',
+        dateOfBirth: contact.dateOfBirth || '',
         source: contact.source,
         tags: contact.tags || [],
         createdAt: contact.createdAt,
         // Zmapowane custom fields
         mainProblem: mainProblem?.value || '',
-        marketingConsent: marketing?.value === 'tak' || marketing?.value === true,
+        sourceContact: sourceContact?.value || '',
+        marketingConsent: marketing?.value || '',
+        preferredChannel: prefChannel?.value || '',
+        potentialProgram: potProgram?.value || '',
+        firstCallNote: firstCallNote?.value || '',
         w0_date: contactW0.date || (w0DateField?.value ? new Date(Number(w0DateField.value)).toISOString() : null),
         w0_notes: w0NotesField?.value || '',
         w0_scheduled: !!(contactW0.scheduled || w0DateField?.value),
         w0_doctor: contactW0.doctor || null,
-        // Surowe custom fields (dla debugowania)
+        // Surowe custom fields (do debugowania / mapowania nowych pól)
         customFields: cf
       },
+      // Pipeline info
+      pipeline: opportunities.length > 0 ? {
+        id: opportunities[0].pipelineId,
+        stageId: opportunities[0].pipelineStageId,
+        stageName: GHL_STAGES[opportunities[0].pipelineStageId] || 'Nieznany',
+        assignedTo: opportunities[0].assignedTo || null,
+        status: opportunities[0].status
+      } : null,
+      // Historia zadań
+      taskHistory: taskHistory.map(t => ({
+        id: t.id,
+        title: t.title,
+        body: t.body,
+        status: t.status,
+        dueDate: t.due_date,
+        assignedTo: t.assigned_to,
+        completedAt: t.completed_at,
+        createdAt: t.created_at
+      })),
       // Ujednolicony Timeline (app + ghl) — z tabeli events
       unifiedTimeline: unifiedTimeline.map(e => ({
         id: e.id,
@@ -2453,21 +2530,10 @@ app.get('/api/calls/history', async (req, res) => {
       const agataOIds    = ['agata_o'];
       const anetaOIds    = ['aneta_o'];
 
+      // Recepcja widzi WSZYSTKIE połączenia — opiekunowie tylko swoje
       if (role !== 'admin' && userId) {
         const userObj = USERS[userId];
-        if (userObj?.role === 'reception') {
-          // Recepcja: pokaż połączenia z user_id recepcji LUB stare rekordy bez user_id z numeru 103
-          filteredRows = filteredRows.filter(row => {
-            if (row.user_id && receptionIds.includes(row.user_id)) return true;
-            // Stare rekordy: brak user_id ale numer wewnętrzny 103 w from/to
-            if (!row.user_id) {
-              const from = String(row.caller_phone || '');
-              const to   = String(row.called_phone || '');
-              return from === '103' || to === '103' || from.endsWith('103') || to.endsWith('103');
-            }
-            return false;
-          });
-        } else if (userObj?.role === 'opiekun') {
+        if (userObj?.role === 'opiekun') {
           const ext = userObj.ext;
           filteredRows = filteredRows.filter(row => {
             if (row.user_id === userId) return true;
@@ -2533,6 +2599,8 @@ app.get('/api/calls/history', async (req, res) => {
           contactName: row.patient_name,
           contactId: row.ghl_contact_id,
           userId: row.user_id,
+          agentName: row.user_id && USERS[row.user_id] ? USERS[row.user_id].name : null,
+          outsideWorkingHours: row.created_at ? isOutsideWorkingHours(row.created_at) : false,
           tag: row.contact_type || (row.status === 'ended' && row.duration_seconds > 0 ? 'connected' : row.direction === 'inbound' ? 'missed' : 'ineffective'),
           contactType: row.contact_type,
           callEffect: row.call_effect,

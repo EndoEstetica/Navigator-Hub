@@ -663,7 +663,10 @@ function setUserRole(role) {
 function startPolling() {
   if (pollingInterval) clearInterval(pollingInterval);
   pollingInterval = setInterval(() => {
-    if (currentView === 'calls') loadCalls();
+    // Nie odświeżaj tabeli połączeń gdy audio jest odtwarzane
+    const audioPlaying = document.querySelector('audio') && 
+      [...document.querySelectorAll('audio')].some(a => !a.paused);
+    if (currentView === 'calls' && !audioPlaying) loadCalls();
     if (currentView === 'dashboard') loadNewLeads();
   }, 30000);
 }
@@ -688,7 +691,8 @@ function connectWebSocket() {
       // Szybszy polling gdy WS rozłączony
       if (pollingInterval) clearInterval(pollingInterval);
       pollingInterval = setInterval(() => {
-        if (currentView === 'calls') loadCalls();
+        const audioPlaying = [...document.querySelectorAll('audio')].some(a => !a.paused);
+        if (currentView === 'calls' && !audioPlaying) loadCalls();
         if (currentView === 'dashboard') loadNewLeads();
       }, 10000);
       setTimeout(connectWebSocket, 5000);
