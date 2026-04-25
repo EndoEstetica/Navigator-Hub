@@ -1,0 +1,443 @@
+diff --git a/diagnoza_pop_up.md b/diagnoza_pop_up.md
+new file mode 100644
+index 0000000..8901c97
+--- /dev/null
++++ b/diagnoza_pop_up.md
+@@ -0,0 +1,53 @@
++# Raport diagnostyczny: Problem z wydajnością pop-upu połączenia
++
++## Wstęp
++Analiza logów oraz kodu źródłowego aplikacji Navigator-Hubb została przeprowadzona w celu zidentyfikowania przyczyn wolnego działania pop-upu połączenia. Logi z ostatniej godziny wskazywały na problemy z wydajnością, powtarzające się komunikaty o pomijaniu żądań nagrań oraz ostrzeżenia o wycieku pamięci związanym z obiektami `EventEmitter`.
++
++## Główne problemy i przyczyny
++
++### 1. Wyczerpanie limitu jednoczesnych żądań do API Zadarma
++W logach widoczne są liczne komunikaty typu:
++`[Recording] Skipping out_... — too many concurrent requests (2)`
++Kod w `server.js` wprowadza sztywny limit dwóch jednoczesnych żądań do API Zadarma (`MAX_CONCURRENT_ZADARMA = 2`). Kiedy wiele połączeń kończy się w krótkim czasie lub kiedy poller (`startRecordingFallbackPoller`) próbuje nadrobić braki w nagraniach, kolejka żądań zostaje zablokowana. To powoduje opóźnienia w przetwarzaniu zdarzeń webhooków i może wpływać na ogólną responsywność aplikacji, ponieważ pętla zdarzeń Node.js jest obciążona próbami obsługi kolejki.
++
++### 2. Agresywny Polling z poziomu klienta (Frontend)
++W pliku `app.js` funkcja `startPolling()` ustawia interwał odpytywania serwera co 30 sekund, a w przypadku problemów z połączeniem WebSocket (funkcja `connectWebSocket()`), interwał ten jest skracany do 10 sekund:
++```javascript
++pollingInterval = setInterval(() => {
++  if (currentView === 'calls' && !isAudioActiveInCallsFeed()) loadCalls();
++  if (currentView === 'dashboard') loadNewLeads();
++}, 10000);
++```
++Dodatkowo, dla każdego brakującego nagrania uruchamiany jest osobny poller w funkcji `startRecordingPoller()`, który odpytuje serwer co 60 sekund. W sytuacji, gdy wiele nagrań jest niedostępnych (z powodu limitu na serwerze), przeglądarka wysyła ogromną liczbę żądań HTTP do serwera, co powoduje "zadławienie" zarówno przeglądarki, jak i serwera Node.js.
++
++### 3. Ostrzeżenie o wycieku pamięci (MaxListenersExceededWarning)
++Logi zawierają ostrzeżenie:
++`(node:50) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 31 error listeners added to [TLSSocket].`
++Pomimo próby zwiększenia limitu w `server.js` (`require('events').defaultMaxListeners = 30;`), problem nadal występuje. Jest to prawdopodobnie spowodowane dużą liczbą jednoczesnych żądań HTTPS do zewnętrznych API (Zadarma, GoHighLevel, Supabase) przy użyciu globalnego agenta z limitem gniazd (`maxSockets: 5`). Kiedy kolejka żądań rośnie, Node.js dodaje nasłuchiwacze błędów do gniazd, przekraczając limit i degradując wydajność aplikacji.
++
++### 4. Synchroniczne, blokujące operacje w trakcie obsługi zdarzeń
++Gdy przychodzi webhook z Zadarma lub nawiązywane jest połączenie WebSocket, serwer wykonuje wiele operacji, w tym zapisy do Supabase, odpytywanie GoHighLevel (GHL) i rozgłaszanie wiadomości do wszystkich klientów. W przypadku endpointu `/api/contact/:id/popup` (wywoływanego przy otwieraniu pop-upu), serwer wysyła aż 4 równoległe żądania do GHL oraz 5 do Supabase. Choć użyto `Promise.all`, w jednowątkowym środowisku Node.js tak duża liczba równoległych żądań we/wy dla każdego pop-upu powoduje opóźnienia w pętli zdarzeń (Event Loop lag).
++
++## Rekomendacje naprawcze
++
++### A. Optymalizacja komunikacji z API Zadarma
++1. **Kolejkowanie z opóźnieniem:** Zamiast odrzucać żądania pobrania nagrania (`Skipping...`), zaimplementuj prawdziwą kolejkę z użyciem pakietów takich jak `async` (np. `async.queue`) lub zewnętrznych narzędzi (np. Redis/Bull), która będzie asynchronicznie i płynnie pobierać nagrania bez blokowania pętli zdarzeń.
++2. **Zwiększenie limitu:** Jeśli to możliwe i dozwolone przez Zadarma, rozważ ostrożne zwiększenie `MAX_CONCURRENT_ZADARMA`.
++
++### B. Redukcja odpytywania (Polling) na frontendzie
++1. **Poleganie na WebSocket:** Skoro aplikacja korzysta z WebSocket do powiadomień w czasie rzeczywistym (`CALL_RINGING`, `CALL_ANSWERED`, `CALL_RECORDING_READY`), agresywny polling (co 10/30 sekund) jest nadmiarowy. Zmodyfikuj architekturę tak, aby `loadCalls()` i `loadNewLeads()` były wywoływane tylko w przypadku utraty i przywrócenia połączenia WS, a nie cyklicznie.
++2. **Globalny Poller Nagrań:** Zamiast tworzyć osobny `setInterval` dla każdego brakującego nagrania (`startRecordingPoller`), użyj jednego globalnego interwału, który odpyta serwer o status wszystkich brakujących nagrań w jednym żądaniu zbiorczym.
++
++### C. Optymalizacja Endpointu Pop-upu (`/api/contact/:id/popup`)
++1. **Cache'owanie:** Wprowadź agresywniejsze cache'owanie danych z GoHighLevel na serwerze (np. Redis lub in-memory z TTL), aby nie odpytywać GHL o te same dane przy każdym otwarciu pop-upu.
++2. **Redukcja zapytań:** Zastanów się, czy wszystkie dane (np. pełna historia zadań, eventów) są absolutnie niezbędne do *natychmiastowego* wyświetlenia w pop-upie. Załaduj podstawowe dane najpierw, a resztę doczytuj asynchronicznie po wyrenderowaniu okna.
++
++### D. Rozwiązanie wycieku pamięci i problemów z połączeniami
++1. **Konfiguracja Agenta HTTPS:** Zwiększ limit `maxSockets` w konfiguracji agenta HTTPS w `server.js` (np. do 50 lub 100), aby uniknąć kolejkowania żądań na poziomie gniazd i generowania ostrzeżeń `MaxListenersExceededWarning`.
++```javascript
++const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
++```
++2. **Obsługa błędów:** Upewnij się, że wszystkie obietnice (Promises) z żądań `axios` i zapytań do `supabase` mają poprawnie zdefiniowane bloki `.catch()`, aby zapobiec "wiszącym" żądaniom blokującym gniazda.
++
++## Podsumowanie
++Wolne działanie pop-upu wynika z nałożenia się na siebie kilku czynników architektonicznych: agresywnego pollingu z frontendu, limitowania jednoczesnych połączeń do zewnętrznych API na serwerze (co skutkuje zatorami i wyciekami pamięci) oraz ciężkich, wielokrotnych zapytań do zewnętrznych usług przy każdym wywołaniu pop-upu. Wdrożenie powyższych rekomendacji powinno znacząco poprawić responsywność aplikacji.
+diff --git a/public/app.js b/public/app.js
+index 9a79a43..ce44861 100644
+--- a/public/app.js
++++ b/public/app.js
+@@ -670,10 +670,11 @@ function isAudioActiveInCallsFeed() {
+ 
+ function startPolling() {
+   if (pollingInterval) clearInterval(pollingInterval);
++  // Polling co 60s gdy WebSocket działa — WS i tak dostarcza zdarzenia na żywo
+   pollingInterval = setInterval(() => {
+     if (currentView === 'calls' && !isAudioActiveInCallsFeed()) loadCalls();
+     if (currentView === 'dashboard') loadNewLeads();
+-  }, 30000);
++  }, 60000);
+ }
+ 
+ // ==================== WEBSOCKET (C4) ====================
+@@ -693,12 +694,12 @@ function connectWebSocket() {
+ 
+     wsConnection.onclose = () => {
+       setWsStatus(false);
+-      // Szybszy polling gdy WS rozłączony
++      // Polling co 20s gdy WS rozłączony (było 10s — zbyt agresywne, dusiło serwer)
+       if (pollingInterval) clearInterval(pollingInterval);
+       pollingInterval = setInterval(() => {
+         if (currentView === 'calls' && !isAudioActiveInCallsFeed()) loadCalls();
+         if (currentView === 'dashboard') loadNewLeads();
+-      }, 10000);
++      }, 20000);
+       setTimeout(connectWebSocket, 5000);
+     };
+ 
+@@ -1821,6 +1822,29 @@ async function fetchPopupEnrichment(contactId) {
+       const zBox = document.getElementById('popupZCzymSieZglasza');
+       if (zBox) zBox.classList.remove('hidden');
+     }
++    // Aktualizuj imię i nazwisko z GHL (firstName + lastName oddzielnie)
++    if (data.firstName || data.lastName) {
++      const fullName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
++      if (fullName) {
++        // Zaktualizuj nagłówek popupu
++        const nameEl = document.getElementById('popupPatientName');
++        if (nameEl && (nameEl.textContent === 'Nieznany' || nameEl.textContent === currentContact?.phone)) {
++          nameEl.textContent = fullName;
++        }
++        // Zaktualizuj avatar
++        const avatarEl = document.getElementById('popupAvatar');
++        if (avatarEl) avatarEl.textContent = (data.firstName || fullName).charAt(0).toUpperCase();
++        // Zaktualizuj pole manualne
++        const manualInput = document.getElementById('manualPatientName');
++        if (manualInput && !manualInput.value) manualInput.value = fullName;
++        // Zapisz w currentContact
++        if (currentContact) {
++          currentContact.name = fullName;
++          currentContact.firstName = data.firstName || '';
++          currentContact.lastName = data.lastName || '';
++        }
++      }
++    }
+     // Aktualizuj currentContact z danymi z popup
+     if (currentContact && data.opportunityId) {
+       currentContact.opportunityId = data.opportunityId;
+@@ -2114,6 +2138,8 @@ async function saveReport() {
+           userId: currentUser?.id || '',
+           contactId: contactId || '',
+           contactName: reportData.manualName || currentContact?.name || '',
++          firstName: currentContact?.firstName || '',
++          lastName: currentContact?.lastName || '',
+           cancellationReason: reportData.powodOdwolania || '',
+           w0Date: reportData.w0DateTime || null,
+           isFollowUp: !!followUpDelay,
+@@ -3848,6 +3874,10 @@ async function openPatientCard(contactId, contactName) {
+ 
+     // === DANE PODSTAWOWE ===
+     const setField = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
++    // Imię i nazwisko oddzielnie (jak w GHL)
++    setField('patientCardFirstName', contact.firstName || '');
++    setField('patientCardLastName', contact.lastName || '');
++    // Zachowane dla kompatybilności wstecznej
+     setField('patientCardName', `${contact.firstName || ''} ${contact.lastName || ''}`.trim());
+     setField('patientCardPhone', contact.phone);
+     setField('patientCardEmail', contact.email);
+diff --git a/public/index.html b/public/index.html
+index a2f8c3c..19ed066 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -935,7 +935,9 @@
+         <div id="patientCardSection_info" style="padding:16px;">
+           <!-- Imię, telefon -->
+           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+-            <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Imię i nazwisko</div><div id="patientCardName" style="font-size:16px;font-weight:700;color:#1e293b;">—</div></div>
++            <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Imię</div><div id="patientCardFirstName" style="font-size:16px;font-weight:700;color:#1e293b;">—</div></div>
++            <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Nazwisko</div><div id="patientCardLastName" style="font-size:16px;font-weight:700;color:#1e293b;">—</div></div>
++            <div style="display:none;"><div id="patientCardName">—</div></div>
+             <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Telefon</div><div id="patientCardPhone" style="font-size:15px;font-weight:700;color:#3b82f6;">—</div></div>
+             <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Email</div><div id="patientCardEmail" style="font-size:13px;color:#1e293b;">—</div></div>
+             <div><div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Miasto</div><div id="patientCardCity" style="font-size:13px;color:#1e293b;">—</div></div>
+diff --git a/server.js b/server.js
+index c6989b8..a4265b1 100644
+--- a/server.js
++++ b/server.js
+@@ -10,8 +10,9 @@ const crypto = require('crypto');
+ const { createClient } = require('@supabase/supabase-js');
+ 
+ // Fix memory leak: zwiększ limit listenerów i użyj keepAlive
+-require('events').defaultMaxListeners = 30;
+-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 5 });
++// maxSockets: 50 — zapobiega MaxListenersExceededWarning przy wielu równoległych żądaniach do GHL/Zadarma/Supabase
++require('events').defaultMaxListeners = 50;
++const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50, maxFreeSockets: 10, timeout: 30000 });
+ axios.defaults.httpsAgent = httpsAgent;
+ 
+ // ─── Supabase ────────────────────────────────────────────────────────────────
+@@ -278,7 +279,7 @@ const activeExtMap = new Map(); // '103' → 'kasia', '101' → 'agata_o', '102'
+ // Strategia retry: 5s, 30s, 1m, 2m, 5m, 10m, 20m, 30m, 60m
+ const RETRY_DELAYS = [30000, 60000, 120000, 300000, 600000, 1200000, 1800000]; // 30s, 1m, 2m, 5m, 10m, 20m, 30m
+ let activeZadarmaRequests = 0;
+-const MAX_CONCURRENT_ZADARMA = 2; // max 2 jednoczesne requesty do Zadarma
++const MAX_CONCURRENT_ZADARMA = 5; // max 5 jednoczesnych requestów do Zadarma (zwiększone z 2 — fix wydajności)
+ 
+ // ─── Zadarma — podpis API (zweryfikowany algorytm z dokumentacji Zadarma) ──────
+ // Źródło: support Zadarma + dokument "Moment Przełomowy"
+@@ -1457,14 +1458,26 @@ app.delete('/api/tasks/:id', async (req, res) => {
+   tasksPool.delete(taskId);
+   broadcast({ type: 'TASK_DELETED', id: taskId });
+   res.json({ success: true });
+-});
+-
+-// ─── POPUP DANYCH KONTAKTU (szybkie dane dla popupu połączenia) ─────────────────
++});// ─── POPUP DANYCH KONTAKTU (szybkie dane dla popupu połączenia) ─────────────────────
+ // Zwraca: etap GHL, status operacyjny, W0, ostatnią notatkę — bez pełnych activities
++// Cache in-memory dla popup (30 sekund TTL — wystarczy na czas rozmowy)
++if (!global.popupCache) global.popupCache = new Map();
++setInterval(() => {
++  const now = Date.now();
++  for (const [k, v] of global.popupCache.entries()) {
++    if (now - v.ts > 30000) global.popupCache.delete(k);
++  }
++}, 60000); // sprzątanie co minutę
++
+ app.get('/api/contact/:id/popup', async (req, res) => {
+   const contactId = req.params.id;
++  // Sprawdź cache (30s TTL — popup otwierany wielokrotnie przy tym samym połączeniu)
++  const cached = global.popupCache.get(contactId);
++  if (cached && (Date.now() - cached.ts < 30000)) {
++    return res.json(cached.data);
++  }
+   try {
+-    // 1. Pobierz dane z GHL (kontakt + szansa sprzedaży)
++    // 1. Pobierz dane z GHL (kontakt + szansa sprzedaży) RÓWNOLEGLE
+     const [contactResp, oppsResp] = await Promise.allSettled([
+       axios.get(`https://services.leadconnectorhq.com/contacts/${contactId}`, { headers: ghlHeaders, timeout: 8000 }),
+       axios.get(`https://services.leadconnectorhq.com/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}&limit=1`, { headers: ghlHeaders, timeout: 8000 })
+@@ -1518,7 +1531,7 @@ app.get('/api/contact/:id/popup', async (req, res) => {
+     const w0Doctor = contactRow?.w0_doctor || w0FromDB?.doctor || null;
+     // 5. Ustal etap GHL
+     const stageName = latestOpp ? (GHL_STAGES[latestOpp.pipelineStageId] || latestOpp.pipelineStageId || null) : null;
+-    res.json({
++    const popupData = {
+       id: contactId,
+       firstName: contact.firstName || '',
+       lastName: contact.lastName || '',
+@@ -1534,7 +1547,10 @@ app.get('/api/contact/:id/popup', async (req, res) => {
+       w0_doctor: w0Doctor,
+       lastNote,
+       lead_created_at: contact.dateAdded || null
+-    });
++    };
++    // Zapisz do cache (30s TTL)
++    global.popupCache.set(contactId, { ts: Date.now(), data: popupData });
++    res.json(popupData);
+   } catch (err) {
+     console.error('[Popup] Error:', err.message);
+     res.status(500).json({ error: err.message });
+@@ -2114,7 +2130,8 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
+   const { callId } = req.params;
+   const {
+     contactType, callEffect, notes, program, outcome,
+-    userId, contactId, contactName, recordingUrl
++    userId, contactId, contactName, recordingUrl,
++    firstName, lastName  // Imię i nazwisko oddzielnie z GHL
+   } = req.body;
+ 
+   // Aktualizuj in-memory store
+@@ -2198,15 +2215,18 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
+         // Notatka z pierwszej rozmowy (NOWY_PACJENT) — zapisz na stałe w kontakcie
+         if (contactType === 'NOWY_PACJENT' && contactId && notatkaZPierwszejRozmowy) {
+           try {
+-            // Zapisz do contacts w Supabase
+-            await supabase.from('contacts').upsert({
++            // Zapisz do contacts w Supabase (z imię i nazwisko oddzielnie)
++            const contactUpsertData = {
+               ghl_contact_id: contactId,
+               first_call_note: notatkaZPierwszejRozmowy,
+               contact_status: 'nowy_pacjent',
+               first_call_at: new Date().toISOString(),
+               first_call_by: userId,
+               updated_at: new Date().toISOString()
+-            }, { onConflict: 'ghl_contact_id' });
++            };
++            if (firstName) contactUpsertData.first_name = firstName;
++            if (lastName)  contactUpsertData.last_name  = lastName;
++            await supabase.from('contacts').upsert(contactUpsertData, { onConflict: 'ghl_contact_id' });
+             // Event
+             await supabase.from('events').insert({
+               event_type: 'first_call',
+@@ -2326,12 +2346,16 @@ app.patch('/api/calls/:callId/report', async (req, res) => {
+               const responseTimeMs = new Date(firstCallAt) - new Date(leadCreatedAt);
+               const responseTimeMins = Math.round(responseTimeMs / 60000);
+ 
+-              await supabase.from('contacts').update({
++              const firstCallUpdate = {
+                 first_call_at: firstCallAt,
+                 response_time_minutes: responseTimeMins,
+                 is_new_patient: true,
+                 updated_at: now
+-              }).eq('ghl_contact_id', contactId);
++              };
++              // Uzupełnij imię i nazwisko jeśli przesłano z frontendu
++              if (firstName) firstCallUpdate.first_name = firstName;
++              if (lastName)  firstCallUpdate.last_name  = lastName;
++              await supabase.from('contacts').update(firstCallUpdate).eq('ghl_contact_id', contactId);
+ 
+               // Event: Pierwszy kontakt
+               await supabase.from('events').insert({
+diff --git a/supabase/migration_brakujace_kolumny.sql b/supabase/migration_brakujace_kolumny.sql
+new file mode 100644
+index 0000000..007d372
+--- /dev/null
++++ b/supabase/migration_brakujace_kolumny.sql
+@@ -0,0 +1,30 @@
++-- ============================================================
++-- Navigator-Hubb — Migracja: Brakujące kolumny
++-- Uruchom w: Supabase Dashboard → SQL Editor → New query → Run
++-- BEZPIECZNY: używa IF NOT EXISTS — nie niszczy istniejących danych
++-- ============================================================
++
++-- TABELA: calls — brakujące kolumny
++ALTER TABLE calls ADD COLUMN IF NOT EXISTS scheduled_w0    BOOLEAN DEFAULT FALSE;
++ALTER TABLE calls ADD COLUMN IF NOT EXISTS w0_doctor       TEXT;
++ALTER TABLE calls ADD COLUMN IF NOT EXISTS call_type       TEXT DEFAULT 'follow_up';
++ALTER TABLE calls ADD COLUMN IF NOT EXISTS first_call_note TEXT;
++
++-- TABELA: contacts — brakujące kolumny
++ALTER TABLE contacts ADD COLUMN IF NOT EXISTS first_call_note TEXT;
++ALTER TABLE contacts ADD COLUMN IF NOT EXISTS first_call_by  TEXT;
++
++-- Indeksy (opcjonalne, ale zalecane dla wydajności)
++CREATE INDEX IF NOT EXISTS idx_calls_scheduled_w0  ON calls(scheduled_w0) WHERE scheduled_w0 = true;
++CREATE INDEX IF NOT EXISTS idx_calls_call_type     ON calls(call_type);
++
++-- Weryfikacja — powinny pojawić się wszystkie nowe kolumny
++SELECT table_name, column_name, data_type
++FROM information_schema.columns
++WHERE table_schema = 'public'
++  AND (
++    (table_name = 'calls'    AND column_name IN ('scheduled_w0','w0_doctor','call_type','first_call_note'))
++    OR
++    (table_name = 'contacts' AND column_name IN ('first_call_note','first_call_by'))
++  )
++ORDER BY table_name, column_name;
+diff --git a/supabase_check.md b/supabase_check.md
+new file mode 100644
+index 0000000..39d9fe3
+--- /dev/null
++++ b/supabase_check.md
+@@ -0,0 +1,117 @@
++# Weryfikacja bazy danych Supabase dla Navigator-Hubb
++
++Aby upewnić się, że Twoja baza danych w Supabase zawiera wszystkie tabele i kolumny wymagane przez najnowszą wersję kodu aplikacji (szczególnie moduł Reception OS i raportowanie połączeń), przygotowałem poniższą checklistę oraz skrypt diagnostyczny.
++
++Kod aplikacji (`server.js`) w wielu miejscach odwołuje się do specyficznych kolumn. Brak którejkolwiek z nich spowoduje błędy przy zapisie raportu lub wyświetlaniu pop-upu.
++
++## Skrypt weryfikacyjny (do uruchomienia w Supabase)
++
++Skopiuj poniższy kod SQL i uruchom go w **Supabase Dashboard → SQL Editor → New query → Run**. Wynik pokaże, czy brakuje jakichkolwiek krytycznych kolumn w głównych tabelach.
++
++```sql
++-- Skrypt sprawdzający obecność kluczowych tabel i kolumn w Navigator-Hubb
++DO $$
++DECLARE
++    missing_cols TEXT := '';
++    check_col RECORD;
++BEGIN
++    -- Lista wymaganych kolumn w formacie 'tabela.kolumna'
++    FOR check_col IN SELECT * FROM (VALUES 
++        -- Tabela: calls
++        ('calls', 'call_id'), ('calls', 'pbx_call_id'), ('calls', 'recording_url'), 
++        ('calls', 'contact_type'), ('calls', 'call_effect'), ('calls', 'treatment'), 
++        ('calls', 'call_reason'), ('calls', 'scheduled_w0'), ('calls', 'w0_date'), 
++        ('calls', 'w0_doctor'), ('calls', 'cancellation_reason'), ('calls', 'is_follow_up'), 
++        ('calls', 'first_call_at'), ('calls', 'w0_booked_at'), ('calls', 'call_type'),
++        ('calls', 'first_call_note'),
++        
++        -- Tabela: contacts
++        ('contacts', 'ghl_contact_id'), ('contacts', 'phone'), ('contacts', 'email'),
++        ('contacts', 'is_new_patient'), ('contacts', 'w0_scheduled'), ('contacts', 'w0_date'),
++        ('contacts', 'first_call_at'), ('contacts', 'response_time_minutes'), 
++        ('contacts', 'lead_to_w0_days'), ('contacts', 'w0_wait_days'), 
++        ('contacts', 'lead_created_at'), ('contacts', 'contact_status'),
++        ('contacts', 'first_call_note'), ('contacts', 'first_call_by'),
++        
++        -- Tabela: tasks
++        ('tasks', 'contact_id'), ('tasks', 'due_date'), ('tasks', 'assigned_to'),
++        ('tasks', 'status'), ('tasks', 'pool'), ('tasks', 'ghl_task_id'),
++        ('tasks', 'task_type'), ('tasks', 'phone'), ('tasks', 'follow_up_delay'),
++        ('tasks', 'is_urgent'), ('tasks', 'completed_at'),
++        
++        -- Tabela: events
++        ('events', 'event_type'), ('events', 'contact_id'), ('events', 'description'),
++        ('events', 'metadata'), ('events', 'source'),
++        
++        -- Tabela: edit_requests
++        ('edit_requests', 'contact_id'), ('edit_requests', 'field_name'),
++        ('edit_requests', 'status'),
++        
++        -- Tabela: user_activity
++        ('user_activity', 'user_id'), ('user_activity', 'is_online')
++    ) AS t(table_name, column_name)
++    LOOP
++        -- Sprawdzenie czy kolumna istnieje
++        IF NOT EXISTS (
++            SELECT 1 FROM information_schema.columns 
++            WHERE table_schema = 'public' 
++              AND table_name = check_col.table_name 
++              AND column_name = check_col.column_name
++        ) THEN
++            missing_cols := missing_cols || check_col.table_name || '.' || check_col.column_name || E'\n';
++        END IF;
++    END LOOP;
++
++    IF missing_cols = '' THEN
++        RAISE NOTICE '✅ Wszystkie kluczowe kolumny i tabele ISTNIEJĄ!';
++    ELSE
++        RAISE EXCEPTION '❌ BRAKUJĄCE KOLUMNY: %', E'\n' || missing_cols;
++    END IF;
++END $$;
++```
++
++## Checklista najważniejszych zmian z ostatnich migracji
++
++Z analizy kodu wynika, że najczęstszym powodem problemów są brakujące kolumny z najnowszych migracji (tzw. "Reception OS"). Upewnij się, że posiadasz następujące struktury:
++
++### 1. Tabela `contacts` (Zarządzanie pacjentami)
++Aplikacja intensywnie używa tej tabeli do mierzenia czasu reakcji i śledzenia statusu "nowy pacjent".
++Wymagane nowe kolumny:
++- `is_new_patient` (BOOLEAN)
++- `lead_created_at` (TIMESTAMPTZ)
++- `first_call_at` (TIMESTAMPTZ)
++- `response_time_minutes` (INTEGER)
++- `w0_scheduled` (BOOLEAN)
++- `first_call_note` (TEXT) - wprowadzona w najnowszej migracji
++- `contact_status` (TEXT)
++
++### 2. Tabela `calls` (Raportowanie)
++Gdy konsultant zapisuje raport, kod próbuje zaktualizować te pola. Jeśli ich brakuje, zapis kończy się błędem (często ukrytym przed użytkownikiem).
++Wymagane nowe kolumny:
++- `call_type` (TEXT) - określa czy to pierwszy kontakt, czy follow-up
++- `cancellation_reason` (TEXT) - powód odwołania wizyty
++- `is_follow_up` (BOOLEAN)
++- `w0_booked_at` (TIMESTAMPTZ)
++- `first_call_note` (TEXT)
++
++### 3. Tabela `tasks` (Zadania i Follow-upy)
++System automatycznie tworzy zadania (np. po odwołaniu wizyty bez nowego terminu).
++Wymagane nowe kolumny:
++- `task_type` (TEXT) - np. 'follow_up_call'
++- `phone` (TEXT) - numer pacjenta (dodany niedawno dla wygody recepcji)
++- `follow_up_delay` (TEXT)
++- `is_urgent` (BOOLEAN)
++
++### 4. Nowe tabele wspierające
++- **`events`**: Tabela osi czasu pacjenta (historia aktywności, notatki, zmiany statusu).
++- **`edit_requests`**: Tabela przechowująca prośby o edycję danych kontaktu wysyłane do "Soni".
++- **`user_activity`**: Tabela śledząca, kto jest aktualnie online (funkcja heartbeat).
++
++## Jak naprawić braki?
++
++Jeśli powyższy skrypt wskaże brakujące kolumny, najlepszym rozwiązaniem jest uruchomienie kompletnego skryptu migracyjnego przygotowanego w repozytorium, który zawiera instrukcje `IF NOT EXISTS` (jest w pełni bezpieczny dla istniejących danych).
++
++Plik ten znajduje się w repozytorium pod ścieżką:
++`/supabase/FULL_SCHEMA_ALL_MIGRATIONS.sql`
++
++Wystarczy skopiować jego zawartość i uruchomić w edytorze SQL w Supabase. Skrypt ten automatycznie utworzy brakujące tabele i doda wszystkie nowe kolumny do istniejących tabel, zachowując obecne dane pacjentów i nagrania.
