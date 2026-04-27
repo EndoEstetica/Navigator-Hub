@@ -2,6 +2,7 @@
   "name": "navigator-call-v6-final",
   "version": "6.1.0",
   "description": "Navigator Call v6 — Full version with Zadarma, GHL, Supabase",
+  "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
